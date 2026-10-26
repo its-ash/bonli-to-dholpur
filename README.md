@@ -167,5 +167,7 @@ Tracks that fail to load are skipped automatically.
 * **No persistence.** Distance and settings reset on reload.
 * **No asset pipeline.** Every texture is drawn procedurally on a `<canvas>` at
   low resolution for the pixel-art look, so there are no image files to load.
-* **Rendering** happens at 1/`PIXEL_SCALE` (one third) of the window resolution
-  and is upscaled with `image-rendering: pixelated`.
+* **Rendering** happens at 1/`PIXEL_SCALE` of the window resolution and is
+  smoothed back up by the browser. Set `PIXEL_SCALE = 1` in
+  `scripts/constants.js` for full native sharpness, or `3` for a chunkier
+  retro look (the value only affects the 3D scene, never the HUD text).

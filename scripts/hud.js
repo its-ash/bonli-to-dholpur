@@ -74,7 +74,6 @@ export function createHUD({ onToggleAuto } = {}) {
         padding: 10px 12px;
         border: 4px solid #FFD700;
         box-shadow: 4px 4px 0 #000000;
-        image-rendering: pixelated;
         min-width: 190px;
         max-width: 260px;
         line-height: 1.5;

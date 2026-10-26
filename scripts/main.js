@@ -21,22 +21,25 @@ import { createHUD, updateHUD, createMusicUI, setHudTouchMode, setHudMobileMode 
 import { createMusicPlayer } from './music.js';
 import { isTouchDevice } from './touch.js';
 
-// --- Renderer (pixel-art: low internal resolution, nearest upscale) ---
-const renderer = new THREE.WebGLRenderer({ antialias: false });
+// --- Renderer ---
+// The scene still renders at a reduced resolution for the pixel-art look, but
+// antialiasing is on and CSS uses 'auto' scaling so the result stays clear
+// instead of blocky.
+const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
 renderer.toneMapping = THREE.NoToneMapping;
 
-// Render at 1/PIXEL_SCALE of the window resolution and let CSS upscale the
-// canvas with nearest-neighbour filtering. This is what gives the chunky
-// retro-pixel look; antialiasing is off so the pixels stay crisp.
+// Render at 1/PIXEL_SCALE of the window resolution and let CSS scale it up.
+// 'auto' lets the browser smooth the upscale, which reads much cleaner than
+// nearest-neighbour 'pixelated' at these sizes.
 function resizeRenderer() {
     const width = Math.max(1, Math.floor(window.innerWidth / PIXEL_SCALE));
     const height = Math.max(1, Math.floor(window.innerHeight / PIXEL_SCALE));
     renderer.setSize(width, height, false);
     renderer.domElement.style.width = '100%';
     renderer.domElement.style.height = '100%';
-    renderer.domElement.style.imageRendering = 'pixelated';
+    renderer.domElement.style.imageRendering = 'auto';
 }
 
 resizeRenderer();

@@ -43,8 +43,11 @@ export const SEGMENT_RECYCLE_BEHIND = 90; // how much road stays behind the bus
 export const WORLD_AHEAD = SEGMENT_LENGTH * SEGMENT_COUNT - 120;
 
 // Pixel-art look: the scene renders at 1/PIXEL_SCALE resolution and is
-// upscaled by the browser with nearest-neighbour filtering
-export const PIXEL_SCALE = 3;
+// upscaled by the browser. A smaller value means a sharper, clearer image:
+//   3 = very chunky, 2 = mild pixelation, 1 = full native resolution.
+// 2 keeps some of the retro character without making signs and lanes hard to
+// read on a phone.
+export const PIXEL_SCALE = 2;
 
 // Bus dimensions
 export const BUS_LENGTH = 10;

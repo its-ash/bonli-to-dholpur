@@ -57,7 +57,6 @@ function createPadButton(parent, label, action, hint, onManualInput) {
         user-select: none;
         -webkit-user-select: none;
         -webkit-tap-highlight-color: transparent;
-        image-rendering: pixelated;
     `;
 
     const press = (event) => {
