@@ -27,11 +27,17 @@ export function createSkyDome() {
         map: texture,
         fog: false,
         depthWrite: false,
-        side: THREE.BackSide
+        // The geometry above is already inverted by scale(-1, 1, 1), so its
+        // front faces point inward. Using BackSide here (as well as flipping)
+        // culled the whole dome and left a black horizon band.
+        side: THREE.FrontSide
     });
 
     const skyDome = new THREE.Mesh(geometry, material);
     skyDome.renderOrder = -1;
+    // Draw the sky behind everything, and never let it be culled by frustum
+    // culling as it travels with the camera.
+    skyDome.frustumCulled = false;
     return skyDome;
 }
 
