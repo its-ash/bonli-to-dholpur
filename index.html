@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <!-- viewport-fit=cover keeps the touch pad off the notch/home bar;
+         user-scalable=no stops double-taps from zooming the game -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#16161F">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Bus Driving Game - Three.js</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #16161F;
+            /* Stop the browser from panning / zooming the page on touch drags */
+            touch-action: none;
+            overscroll-behavior: none;
+            -webkit-overflow-scrolling: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        canvas {
+            display: block;
+        }
+        /* The game owns the whole screen, including the safe areas on phones */
+        body {
+            padding: env(safe-area-inset-top) env(safe-area-inset-right)
+                     env(safe-area-inset-bottom) env(safe-area-inset-left);
+        }
+    </style>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+        }
+    }
+    </script>
+</head>
+<body>
+    <script type="module" src="scripts/main.js"></script>
+</body>
+</html>
