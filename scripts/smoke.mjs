@@ -281,6 +281,12 @@ function installBrowserStubs() {
             const list = listeners[type] || [];
             const at = list.indexOf(fn);
             if (at !== -1) list.splice(at, 1);
+        },
+        // Lets tests simulate a user gesture (needed for the autoplay unlock)
+        dispatchEvent: (event) => {
+            const list = (listeners[event.type] || []).slice();
+            list.forEach(fn => fn(event));
+            return true;
         }
     };
     globalThis.__listeners = listeners;
@@ -543,6 +549,53 @@ async function main() {
     check('toggle() pauses playback', music.getState().isPlaying === false);
     music.toggle();
     check('toggle() resumes playback', music.getState().isPlaying === true);
+
+    // --- Autoplay unlock must survive a rejected first attempt ---
+    // Phones routinely reject the first play() (not decoded yet / untrusted
+    // gesture). The gesture listeners have to stay armed so the next tap can
+    // retry - otherwise music is silently disabled forever on mobile.
+    const gestureMusic = createMusicPlayer({ playlist: ['song/A.mp3'] });
+    const gestureAudio = globalThis.__audios[globalThis.__audios.length - 1];
+
+    // First attempt fails, exactly like a strict mobile browser
+    let attempts = 0;
+    gestureAudio.play = function () {
+        attempts += 1;
+        if (attempts === 1) return Promise.reject(new Error('NotAllowedError'));
+        this.paused = false;
+        return Promise.resolve();
+    };
+
+    gestureMusic.startOnFirstInteraction();
+
+    const userTap = () => window.dispatchEvent(new Event('pointerdown'));
+    // play() resolves asynchronously, so let the microtask queue drain between taps
+    const settle = () => new Promise(resolve => setTimeout(resolve, 0));
+
+    userTap();
+    await settle();
+    const afterFirst = gestureMusic.getState().isPlaying;
+
+    userTap();
+    await settle();
+    const afterSecond = gestureMusic.getState().isPlaying;
+
+    check('a rejected first autoplay attempt does not disable music',
+        afterFirst === false && attempts >= 2,
+        `attempts=${attempts}`);
+    check('the next tap retries and starts playback',
+        afterSecond === true);
+
+    // A touch-only phone must be able to unlock music as well
+    const touchMusic = createMusicPlayer({ playlist: ['song/A.mp3'] });
+    const touchAudio = globalThis.__audios[globalThis.__audios.length - 1];
+    let touchPlays = 0;
+    touchAudio.play = function () { touchPlays += 1; this.paused = false; return Promise.resolve(); };
+    touchMusic.startOnFirstInteraction();
+    window.dispatchEvent(new Event('touchstart'));
+    await settle();
+    check('a touch gesture unlocks music on a phone',
+        touchPlays > 0 && touchMusic.getState().isPlaying);
 
     // UI wiring
     check('music panel exists in the DOM', !!musicUiPanel());
@@ -897,6 +950,18 @@ async function main() {
     check('the sky dome follows the bus too',
         !!skyDome && Math.abs(skyDome.position.z - bus.position.z) < 1e-6,
         skyDome ? `sky z=${Math.round(skyDome.position.z)}` : 'missing');
+
+    // The sky must actually be DRAWN. The dome geometry is inverted with
+    // scale(-1, 1, 1), so the material has to be FrontSide - adding BackSide on
+    // top culled the entire dome and left a black band across the horizon.
+    check('sky dome is not double-flipped (no black horizon)',
+        skyDome && skyDome.material.side !== 1,
+        skyDome ? `side=${skyDome.material.side}` : 'missing');
+    check('sky dome is not frustum culled while it follows the camera',
+        skyDome && skyDome.frustumCulled === false);
+    check('sky dome is drawn behind everything',
+        skyDome && skyDome.renderOrder < 0,
+        skyDome ? `renderOrder=${skyDome.renderOrder}` : 'missing');
 
     // --------------------------------------------------- HUD trip meter
     const distanceEl = findNode('#distance');

@@ -175,17 +175,40 @@ export function createMusicPlayer({ playlist = SONG_PLAYLIST, volume = MUSIC_VOL
             return () => listeners.delete(fn);
         },
         /**
-         * Starts playback on the first user gesture (browser autoplay policy)
+         * Starts playback on the first user gesture (browser autoplay policy).
+         *
+         * Phones are strict about autoplay: the first `play()` often rejects
+         * because the media is not decoded yet or the gesture was not trusted.
+         * The listeners therefore stay armed until playback has actually begun,
+         * so the next tap/key press gets another chance instead of music being
+         * disabled for the rest of the session.
          */
         startOnFirstInteraction() {
             if (started) return;
-            const start = () => {
-                if (!started) play();
-                window.removeEventListener('pointerdown', start);
-                window.removeEventListener('keydown', start);
+
+            // Cover every way a phone can produce a gesture: pointer, touch,
+            // click and key. Capture phase so it fires even if something
+            // stops propagation.
+            const events = ['pointerdown', 'touchstart', 'touchend', 'click', 'keydown'];
+
+            const stopListening = () => {
+                events.forEach(type => window.removeEventListener(type, start, true));
             };
-            window.addEventListener('pointerdown', start);
-            window.addEventListener('keydown', start);
+
+            function start() {
+                if (started) {
+                    stopListening();
+                    return;
+                }
+
+                // `play()` calls audio.play() synchronously before its first
+                // await, which keeps the unlock inside the gesture on iOS.
+                play().then(ok => {
+                    if (ok) stopListening();
+                });
+            }
+
+            events.forEach(type => window.addEventListener(type, start, true));
         }
     };
 
