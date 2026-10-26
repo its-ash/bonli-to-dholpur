@@ -251,7 +251,21 @@ function installBrowserStubs() {
 
     globalThis.document = {
         createElement: makeElement,
-        body: makeElement('body')
+        body: makeElement('body'),
+        // The HUD reaches for the music panel on mobile; walk the body for it
+        querySelector(selector) {
+            const id = selector.replace(/^#/, '');
+            const walk = (node) => {
+                for (const child of node.children || []) {
+                    if (child.id === id) return child;
+                    const hit = walk(child);
+                    if (hit) return hit;
+                }
+                return null;
+            };
+            if (this.body.id === id) return this.body;
+            return walk(this.body);
+        }
     };
 
     const listeners = {};
@@ -819,7 +833,10 @@ async function main() {
         world.potholes.some(hole => hole.visible),
         `${world.potholes.filter(hole => hole.visible).length} visible`);
     check('pot holes sit inside the lanes, clear of the centre line',
-        world.potholes.every(hole => Math.abs(hole.position.x) > 1.0),
+        // Lane centres are ±1.5 and ±4.5 with a small jitter, so every hole must
+        // stay well to one side of the divider at x = 0.
+        world.potholes.every(hole => Math.abs(hole.position.x) > 0.8) &&
+        world.potholes.some(hole => Math.abs(hole.position.x) > 3),
         `closest to centre x=${Math.min(...world.potholes.map(h => Math.abs(h.position.x))).toFixed(2)}`);
     const testHole = world.potholes[0];
     testHole.position.set(bus.position.x, 0.03, bus.position.z);
@@ -938,11 +955,13 @@ async function main() {
         hudEl.querySelector('#controls').style.display !== 'none');
     check('desktop HUD sits in the top-right corner',
         hudEl.style.top === '16px' && hudEl.style.right === '16px');
+    check('desktop HUD is not reported as mobile',
+        hudModule.isHudMobileLayout(hudEl) === false);
 
     hudModule.setHudMobileMode(hudEl, true);
     check('mobile HUD is a single bottom bar',
-        hudEl.style.bottom === '0' && hudEl.style.top === 'auto',
-        `top=${hudEl.style.top}, bottom=${hudEl.style.bottom}`);
+        hudEl.dataset.layout === 'mobile' && hudEl.style.bottom === '0',
+        `layout=${hudEl.dataset.layout}, bottom=${hudEl.style.bottom}`);
     check('isHudMobileLayout reports the mobile layout',
         hudModule.isHudMobileLayout(hudEl) === true);
     check('mobile HUD hides the keyboard hints',
@@ -964,6 +983,15 @@ async function main() {
     check('mobile HUD exposes exactly one button (AUTO DRIVE)',
         mobileButtons.length === 1 && mobileButtons[0].id === 'auto-button',
         mobileButtons.map(b => b.id).join(', '));
+
+    // The music panel buttons (a separate element) must be hidden as well, so
+    // the ONLY control on a phone is AUTO DRIVE.
+    const visibleMusicButtons = ['#music-prev', '#music-play', '#music-next']
+        .map(selector => findNode(selector))
+        .filter(button => button && button.style.display !== 'none');
+    check('mobile hides the music panel buttons too',
+        visibleMusicButtons.length === 0,
+        visibleMusicButtons.map(b => b.id).join(', ') || 'all hidden');
 
     // The mobile music panel must not render any buttons either
     const mobileMusic = await import(pathToFileURL(join(tempDir, 'music.js')).href);

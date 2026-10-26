@@ -182,8 +182,22 @@ export function setHudMobileMode(hud, mobile) {
     const controls = hud.querySelector('#controls');
     const speedEl = hud.querySelector('#speed');
 
+    // The music panel's buttons are a separate element; on mobile nothing but
+    // AUTO DRIVE may be tappable, so they are hidden along with the hints.
+    const hideMusicButtons = (hide) => {
+        if (typeof document === 'undefined' || !document.querySelector) return;
+        const musicPanel = document.querySelector('#music');
+        if (!musicPanel || !musicPanel.querySelector) return;
+        ['#music-prev', '#music-play', '#music-next'].forEach(selector => {
+            const button = musicPanel.querySelector(selector);
+            if (button) button.style.display = hide ? 'none' : '';
+        });
+    };
+
     if (!mobile) {
         // Restore the desktop corner panel
+        hud.dataset.layout = 'desktop';
+        hideMusicButtons(false);
         hud.style.top = '16px';
         hud.style.bottom = '';
         hud.style.left = '';
@@ -206,6 +220,9 @@ export function setHudMobileMode(hud, mobile) {
     }
 
     // --- The whole panel becomes a bottom bar ---
+    // The flag is what isHudMobileLayout() reads: comparing inline styles is
+    // unreliable because browsers normalise '0' to '0px'.
+    hud.dataset.layout = 'mobile';
     hud.style.top = 'auto';
     hud.style.bottom = '0';
     hud.style.left = '0';
@@ -221,6 +238,9 @@ export function setHudMobileMode(hud, mobile) {
 
     // Keyboard hints are meaningless on a touch screen
     if (controls) controls.style.display = 'none';
+
+    // Nothing else may be tappable on mobile
+    hideMusicButtons(true);
 
     // --- One large AUTO button, pinned to the bottom ---
     if (autoButton) {
@@ -238,8 +258,8 @@ export function setHudMobileMode(hud, mobile) {
  * @returns {boolean}
  */
 export function isHudMobileLayout(hud) {
-    if (!hud) return false;
-    return hud.style.bottom === '0' && hud.style.top === 'auto';
+    if (!hud || !hud.dataset) return false;
+    return hud.dataset.layout === 'mobile';
 }
 
 /**
