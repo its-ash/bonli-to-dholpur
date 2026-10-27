@@ -7,7 +7,7 @@ import {
     COLORS, FOG_COLOR, FOG_NEAR, FOG_FAR,
     LANE_LEFT, PLAYER_START_Z, PIXEL_SCALE
 } from './constants.js';
-import { initInput, getKeys, setKey, releaseAllKeys, DRIVING_KEY_CODES } from './input.js';
+import { initInput, getKeys, setKey, setSteer, releaseAllKeys, DRIVING_KEY_CODES } from './input.js';
 import { createCameraController, zoomForViewport } from './camera.js';
 import { createSkyDome, createLighting, createGround, followGroundAndSky } from './environment.js';
 import { createEndlessWorld } from './endless.js';
@@ -19,6 +19,7 @@ import { createJourney } from './journey.js';
 import { createAutopilot } from './autopilot.js';
 import { createHUD, updateHUD, createMusicUI, setHudTouchMode, setHudMobileMode } from './hud.js';
 import { createMusicPlayer } from './music.js';
+import { createBusSim } from './bussim.js';
 import { isTouchDevice } from './touch.js';
 
 // --- Renderer ---
@@ -87,8 +88,11 @@ bus.position.set(LANE_LEFT, 0, PLAYER_START_Z);
 bus.rotation.y = 0;
 scene.add(bus);
 
-// --- The endless road, with dhabas, petrol pumps, boards and pot holes ---
+// --- The endless road, with dhabas, petrol pumps and boards ---
 const world = createEndlessWorld({ bus, scene });
+
+// --- Bus simulation: fuel, bus stops with passengers and fares, safety, horn ---
+const busSim = createBusSim({ bus, scene, pumps: world.pumps });
 
 // --- The Indian bus stand the journey starts from ---
 // The bus is parked in the bay; once the player pulls out it is left behind.
@@ -112,7 +116,7 @@ updateCamera.setZoom(zoomForViewport(window.innerWidth, window.innerHeight));
 const journey = createJourney(bus);
 
 // --- Autopilot (driven by the AUTO button) ---
-const autopilot = createAutopilot(bus, setKey);
+const autopilot = createAutopilot(bus, setKey, setSteer);
 
 /**
  * Starts / stops the AI driver.
@@ -139,8 +143,8 @@ function updateHUDStatus() {
         status: journey.status,
         distanceKm: journey.getState().distanceKm,
         nextTown: journey.nextTown,
-        potholes: world.getState().potholesEnabled,
-        auto: autopilot.getState()
+        auto: autopilot.getState(),
+        sim: busSim.getState()
     });
 }
 
@@ -171,6 +175,11 @@ createMusicUI(musicPlayer, { showButtons: !touchDevice });
 // Browsers block autoplay until the user interacts with the page
 musicPlayer.startOnFirstInteraction();
 
+// H = horn
+window.addEventListener('keydown', (e) => {
+    if (e.code === 'KeyH' && !e.repeat) busSim.honk();
+});
+
 // Music shortcuts: N = next track, M = mute, P = play/pause
 // (ignored while a HUD button has focus so the buttons stay usable)
 window.addEventListener('keydown', (e) => {
@@ -191,13 +200,16 @@ function animate(time) {
     const keys = getKeys();
 
     // The AI driver writes into the same key state the player uses
-    autopilot.update(dt, aiCars, world.potholes);
+    autopilot.update(dt, aiCars);
 
-    // Update bus physics (movement + collisions + pot hole bumps)
-    updateBusPhysics(bus, aiCars, pedestrians, keys, dt, { potholes: world.potholes });
+    // Update bus physics (movement + collisions)
+    updateBusPhysics(bus, aiCars, pedestrians, keys, dt);
 
-    // Keep the endless world wrapped around the bus: road, scenery and holes
-    const worldState = world.update(dt);
+    // Stops, passengers, fuel, fares and safety
+    busSim.update(dt);
+
+    // Keep the endless world wrapped around the bus: road and scenery
+    world.update(dt);
 
     // Advance the trip meter (distance driven, next town)
     journey.update(dt);
@@ -229,8 +241,8 @@ function animate(time) {
         status: journey.status,
         distanceKm: journey.getState().distanceKm,
         nextTown: journey.nextTown,
-        potholes: worldState.potholesEnabled,
-        auto: autopilot.getState()
+        auto: autopilot.getState(),
+        sim: busSim.getState()
     });
 
     // Update sun glow position (follow sun direction)
@@ -264,7 +276,8 @@ globalThis.__skyDome = skyDome;
 globalThis.__journey = journey;
 globalThis.__autopilot = autopilot;
 globalThis.__toggleAutopilot = toggleAutopilot;
+globalThis.__busSim = busSim;
 
 console.log('Three.js Revision:', THREE.REVISION);
 console.log('Bus Driving Game initialized successfully!');
-console.log('Systems: Scene, Lighting, Endless 4-Lane Road, Bus Stand, Dhabas, Petrol Pumps, Distance Boards, Pot Holes, Trees, Bus, AI Cars, Pedestrians, Camera, Physics, Journey, Autopilot, HUD, Touch');
+console.log('Systems: Scene, Lighting, Endless 4-Lane Road, Bus Stand, Dhabas, Petrol Pumps, Distance Boards, Trees, Bus, AI Cars, Pedestrians, Camera, Physics, Journey, Autopilot, Bus Simulation, HUD, Touch');

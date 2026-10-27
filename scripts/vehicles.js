@@ -8,7 +8,7 @@ import {
     CAR_LENGTH, CAR_WIDTH, CAR_HEIGHT, CAR_WHEEL_RADIUS, CAR_WHEEL_WIDTH,
     LANE_LEFT, LANE_RIGHT, LANES_FORWARD, LANES_ONCOMING,
     PLAYER_START_Z, ROAD_LENGTH,
-    COLORS, PHYSICS,
+    COLORS, PHYSICS, TRAFFIC_LANE_CHANGE,
     SAME_DIRECTION_CAR_COUNT, ONCOMING_CAR_COUNT, HEART_TEXT_LINES
 } from './constants.js';
 import { createBusBodyTexture, createCarTexture, createHeartTextTexture } from './utils.js';
@@ -32,8 +32,13 @@ export function createBus() {
         maxSpeed: PHYSICS.BUS_MAX_SPEED,
         acceleration: PHYSICS.BUS_ACCELERATION,
         brakeForce: PHYSICS.BUS_BRAKE_FORCE,
-        turnSpeed: PHYSICS.BUS_TURN_SPEED,
         drag: PHYSICS.BUS_DRAG,
+        steer: 0,            // smoothed wheel input, -1 (right) to +1 (left)
+        roll: 0,             // body lean in radians
+        doorsOpen: false,    // held at a stop while passengers board
+        noFuel: false,       // engine stops when the tank is empty
+        impacts: 0,          // hard hits on traffic (counted by physics)
+        pedestrianHits: 0
     };
 
     // Create pixel-art body texture
@@ -323,7 +328,8 @@ export function createCar(color, variant = 0) {
         isOncoming: false,
         wheels: wheels,
         wheelRadius: CAR_WHEEL_RADIUS,
-        hitTimer: 0
+        hitTimer: 0,
+        laneCooldown: 0
     };
 
     return carGroup;
@@ -384,6 +390,38 @@ export function makeAICars() {
 }
 
 /**
+ * The other lane of the pair this lane belongs to (same direction of travel).
+ * @param {number} laneX
+ * @returns {number|null}
+ */
+function otherLaneOf(laneX) {
+    const pair = [LANES_FORWARD, LANES_ONCOMING].find(lanes => lanes.includes(laneX));
+    return pair ? pair.find(lane => lane !== laneX) : null;
+}
+
+/**
+ * True when no vehicle (the bus included) sits in `laneX` from a little behind
+ * the car up to a clear distance ahead of it. Used before a lane change.
+ * @param {THREE.Group} car
+ * @param {number} laneX
+ * @param {Array<THREE.Group>} aiCars
+ * @param {THREE.Group} [bus]
+ * @returns {boolean}
+ */
+function isLaneFree(car, laneX, aiCars, bus) {
+    const direction = car.userData.isOncoming ? 1 : -1;
+    const blocks = (other) => {
+        if (Math.abs(other.position.x - laneX) > TRAFFIC_LANE_CHANGE.LANE_TOLERANCE) return false;
+        // Positive means the other vehicle is in front of this car
+        const ahead = (other.position.z - car.position.z) * direction;
+        return ahead > -TRAFFIC_LANE_CHANGE.CLEAR_BEHIND && ahead < TRAFFIC_LANE_CHANGE.CLEAR_AHEAD;
+    };
+
+    if (bus && blocks(bus)) return false;
+    return !aiCars.some(other => other !== car && blocks(other));
+}
+
+/**
  * Updates all AI cars
  * Each car now has proper driving physics: it accelerates towards a target
  * speed, brakes (harder than it accelerates) for whatever is in front of it,
@@ -413,11 +451,12 @@ export function updateAICars(aiCars, dt, bus) {
             data.hitTimer = Math.max(0, data.hitTimer - dt);
         }
 
-        // --- Steering: yaw the car towards its lane center ---
+        data.laneCooldown = Math.max(0, data.laneCooldown - dt);
+
+        // --- Steering: drift sideways towards the lane center, at a limited rate ---
         const laneDiff = data.laneX - car.position.x;
-        const steerSpeed = PHYSICS.CAR_STEER_SPEED;
-        car.position.x += laneDiff * steerSpeed * dt;
-        car.position.x = THREE.MathUtils.clamp(car.position.x, data.laneX - 0.5, data.laneX + 0.5);
+        const lateralStep = TRAFFIC_LANE_CHANGE.LATERAL_SPEED * dt;
+        car.position.x += THREE.MathUtils.clamp(laneDiff * PHYSICS.CAR_STEER_SPEED * dt, -lateralStep, lateralStep);
 
         // Point the car at its lane center (small yaw so it visibly steers)
         const heading = data.isOncoming ? Math.PI : 0;
@@ -461,6 +500,16 @@ export function updateAICars(aiCars, dt, bus) {
             const lateral = Math.abs(bus.position.x - car.position.x);
             if (lateral < 2.2) {
                 considerAhead(bus.position.z, Math.abs(bus.userData.speed));
+            }
+        }
+
+        // --- Lane change: stuck behind a slower vehicle, so look for a clear lane ---
+        if (data.laneCooldown <= 0 && gap < TRAFFIC_LANE_CHANGE.TRIGGER_GAP && speedAhead < data.targetSpeed - 2) {
+            const target = otherLaneOf(data.laneX);
+            if (target !== null && isLaneFree(car, target, aiCars, bus)) {
+                data.laneX = target;
+                data.laneCooldown = TRAFFIC_LANE_CHANGE.COOLDOWN_MIN +
+                    Math.random() * (TRAFFIC_LANE_CHANGE.COOLDOWN_MAX - TRAFFIC_LANE_CHANGE.COOLDOWN_MIN);
             }
         }
 

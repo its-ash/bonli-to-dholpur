@@ -3,11 +3,14 @@
 // Keyboard plus an API for the on-screen mobile pad and the autopilot.
 // =============================================
 
+// `steer` is an analog axis (-1 = full right, +1 = full left) written by the
+// autopilot; the keyboard and the touch pad only use the digital left/right.
 const keys = {
     forward: false,
     backward: false,
     left: false,
-    right: false
+    right: false,
+    steer: 0
 };
 
 const keyMap = {
@@ -63,8 +66,21 @@ export function setKey(action, value) {
 }
 
 /**
+ * Sets the analog steering axis (used by the autopilot).
+ * @param {number} value - -1 (full right) to +1 (full left)
+ */
+export function setSteer(value) {
+    const next = Number(value);
+    keys.steer = Number.isFinite(next) ? Math.max(-1, Math.min(1, next)) : 0;
+}
+
+/**
  * Releases every driving key (window blur, touch end, autopilot handoff)
  */
 export function releaseAllKeys() {
-    Object.keys(keys).forEach(action => { keys[action] = false; });
+    keys.forward = false;
+    keys.backward = false;
+    keys.left = false;
+    keys.right = false;
+    keys.steer = 0;
 }

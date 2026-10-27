@@ -108,6 +108,13 @@ export function createHUD({ onToggleAuto } = {}) {
     });
     hud.appendChild(nextTown);
 
+    // --- Bus sim read-out: fuel, passengers, fares and safety on one line ---
+    const sim = makeElement('div', {
+        id: 'sim',
+        css: 'font-size: 11px; color: #9AA0A6; margin-top: 2px;'
+    });
+    hud.appendChild(sim);
+
     // --- AUTO button: hands the bus over to the AI driver ---
     // The HUD itself has pointer-events:none, so the button re-enables them.
     const autoButton = makeElement('button', {
@@ -286,7 +293,7 @@ export function setAutoButtonState(hud, state) {
  * @param {number} speed - Current speed in units/sec
  * @param {{status?: string, message?: string, distanceKm?: number,
  *          nextTown?: {name: string, km: number},
- *          auto?: {active: boolean}, potholes?: boolean}|number} [extra]
+ *          auto?: {active: boolean}}|number} [extra]
  *        Extra trip state; older callers that only pass a speed still work.
  */
 export function updateHUD(hud, speed, extra = {}) {
@@ -322,19 +329,27 @@ export function updateHUD(hud, speed, extra = {}) {
             `NEXT: ${info.nextTown.name} ${Math.max(0, Math.round(info.nextTown.km))} KM`;
     }
 
+    // --- Fuel, passengers, fares and safety ---
+    const simEl = hud.querySelector('#sim');
+    if (simEl && info.sim) {
+        const sim = info.sim;
+        simEl.textContent =
+            `FUEL ${sim.fuelPercent}% | PAX ${sim.passengers}/${sim.capacity} | ₹${sim.fares} | SAFE ${sim.safety}%`;
+    }
+
     const statusEl = hud.querySelector('#status');
     if (statusEl) {
         let text = 'DRIVING';
         let color = '#2ECC71';
 
         if (info.auto && info.auto.active) {
-            text = 'AUTO DRIVING';
+            text = info.auto.overtaking ? 'AUTO OVERTAKING' : 'AUTO DRIVING';
             color = '#4A90D9';
         } else if (info.auto && info.auto.reason) {
             text = info.auto.reason;
             color = '#F39C12';
-        } else if (info.potholes) {
-            text = 'ROUGH ROAD - POT HOLES';
+        } else if (info.sim && info.sim.message) {
+            text = info.sim.message;
             color = '#F39C12';
         }
 

@@ -1,45 +1,61 @@
 // =============================================
 // AUTOPILOT - the AI driver behind the AUTO button
 // One press hands the bus over: it accelerates to a cruising speed, keeps the
-// left lane, slides into the other lane to overtake slower traffic, brakes for
-// whatever is still in the way, and lets go (stopping the bus) when the road is
-// blocked or the end of the road is reached.
+// inside lane, pulls out into the outside lane to overtake a slower vehicle in
+// front, slides back in once the passed vehicle is clear, brakes for whatever
+// is still in the way, and lets go (stopping the bus) when the road is blocked
+// or the end of the road is reached.
 // =============================================
 
 import {
     AUTOPILOT, LANE_LEFT, LANE_RIGHT,
-    LANES_FORWARD, LANES_ONCOMING, ROAD_HALF_WIDTH, PHYSICS
+    LANES_FORWARD, LANES_ONCOMING, ROAD_HALF_WIDTH
 } from './constants.js';
-import { findPotholeAt } from './potholes.js';
+
+// Where the AI driver is in a manoeuvre
+const MODE = {
+    CRUISE: 'cruise',           // keeps the inside lane
+    OVERTAKING: 'overtaking',   // in the outside lane, passing slower traffic
+    RETURNING: 'returning'      // sliding back into the inside lane
+};
 
 /**
  * Creates the autopilot controller.
  *
  * @param {THREE.Object3D} bus - The player bus (needs userData.speed etc.)
  * @param {Function} setKey - (action, value) => void, from scripts/input.js
+ * @param {Function} setSteer - (value) => void, analog steering from -1 to 1
  * @returns {{
  *   engage: () => void,
  *   disengage: (reason?: string) => void,
  *   toggle: () => boolean,
- *   update: (dt: number, aiCars: Array, potholes?: Array) => void,
+ *   update: (dt: number, aiCars: Array) => void,
  *   isActive: () => boolean,
- *   getState: () => {active: boolean, reason: string, laneX: number}
+ *   getState: () => {active: boolean, reason: string, laneX: number, overtaking: boolean}
  * }}
  */
-export function createAutopilot(bus, setKey) {
+export function createAutopilot(bus, setKey, setSteer = () => {}) {
     let active = false;
     let reason = '';
     let stoppedFor = 0;
+    let mode = MODE.CRUISE;
 
-    // Lane the AI driver currently aims for (it changes lanes to overtake)
+    // Lane the AI driver currently aims for
     let targetLaneX = LANE_LEFT;
-    // True while the driver is passing a slower vehicle in the other lane
-    let overtaking = false;
 
     // Normalise a lane so the bus always stays on its own side of the double
     // yellow line, even if it was left facing the wrong way.
     function laneFor(x) {
         return x > 0 ? LANE_RIGHT : LANE_LEFT;
+    }
+
+    /**
+     * The two lanes of this bus's direction of travel, as [inside, outside].
+     * The inside lane is the one next to the centre line.
+     * @returns {Array<number>}
+     */
+    function ownLanes() {
+        return bus.position.x > 0 ? LANES_ONCOMING : LANES_FORWARD;
     }
 
     function engage() {
@@ -48,7 +64,7 @@ export function createAutopilot(bus, setKey) {
         active = true;
         reason = '';
         stoppedFor = 0;
-        overtaking = false;
+        mode = MODE.CRUISE;
 
         // Start from whichever of its own lanes the bus is closest to
         targetLaneX = laneFor(bus.position.x);
@@ -57,8 +73,7 @@ export function createAutopilot(bus, setKey) {
     function releaseKeys() {
         setKey('forward', false);
         setKey('backward', false);
-        setKey('left', false);
-        setKey('right', false);
+        setSteer(0);
     }
 
     function disengage(why = '') {
@@ -85,15 +100,18 @@ export function createAutopilot(bus, setKey) {
     /**
      * Finds the closest vehicle ahead of the bus inside the look-ahead window.
      * The bus drives towards -Z, so "ahead" means a smaller Z.
+     * Only the lane the bus is moving into counts, so a car being passed in
+     * the lane it is leaving does not make the bus brake.
      * @param {Array} aiCars
+     * @param {number} laneX - Lane to look at
      * @returns {{vehicle: Object, gap: number}|null}
      */
-    function findTrafficAhead(aiCars) {
+    function findTrafficAhead(aiCars, laneX) {
         let closest = null;
 
         for (const car of aiCars || []) {
-            // Only vehicles roughly in our lane matter
-            if (Math.abs(car.position.x - bus.position.x) > 2.6) continue;
+            // Only vehicles roughly in that lane matter
+            if (Math.abs(car.position.x - laneX) > 2.6) continue;
 
             // Vehicles driving the other way are not something to follow
             if (car.userData.isOncoming) continue;
@@ -110,34 +128,48 @@ export function createAutopilot(bus, setKey) {
     }
 
     /**
-     * Picks the lane to aim for: dodge into the free lane when something is in
-     * the way, otherwise settle back into the inner lane.
+     * True when no vehicle occupies `laneX` from a little way behind the bus up
+     * to the clearance distance ahead. A lane change is only made when true.
+     * @param {number} laneX
+     * @param {Array} aiCars
+     * @returns {boolean}
+     */
+    function isLaneClear(laneX, aiCars) {
+        return !(aiCars || []).some(car => {
+            if (Math.abs(car.position.x - laneX) > 1.6) return false;
+
+            // Positive means the car is in front of the bus
+            const gap = bus.position.z - car.position.z;
+            return gap > -AUTOPILOT.OVERTAKE_CLEAR_BEHIND && gap < AUTOPILOT.OVERTAKE_CLEAR_AHEAD;
+        });
+    }
+
+    /**
+     * Runs the lane manoeuvre: cruise, overtake, then return to the inside lane.
      * Only the two lanes on the bus's own side of the road are ever used, so the
      * AI never drifts into oncoming traffic.
      * @param {{vehicle: Object, gap: number}|null} ahead
+     * @param {Array} aiCars
      */
-    function chooseLane(ahead) {
-        const blocked = ahead !== null && ahead.gap < AUTOPILOT.OVERTAKE_GAP;
+    function chooseLane(ahead, aiCars) {
+        const [inside, outside] = ownLanes();
 
-        // The two lanes available to this direction of travel
-        const ownLanes = bus.position.x > 0 ? LANES_ONCOMING : LANES_FORWARD;
-
-        if (blocked) {
-            overtaking = true;
-            // Move to the lane the obstacle is NOT in
-            const obstacleX = ahead.vehicle.position.x;
-            const freeLanes = ownLanes.filter(lane => Math.abs(lane - obstacleX) > 1.5);
-            targetLaneX = freeLanes.length > 0 ? freeLanes[0] : ownLanes[0];
-        } else if (overtaking) {
-            // Only return to the inner lane once well clear of the traffic
-            const clearAhead = ahead === null || ahead.gap > AUTOPILOT.OVERTAKE_GAP * 1.6;
-            if (clearAhead) {
-                overtaking = false;
-                targetLaneX = ownLanes[0];
+        if (mode === MODE.CRUISE) {
+            // Pull out only when the slower car is close and the outside lane is free
+            const blocked = ahead !== null && ahead.gap < AUTOPILOT.OVERTAKE_GAP;
+            if (blocked && isLaneClear(outside, aiCars)) {
+                mode = MODE.OVERTAKING;
             }
-        } else {
-            targetLaneX = ownLanes[0];
+        } else if (mode === MODE.OVERTAKING) {
+            // Stay out until the passed vehicle is behind and the inside lane is free
+            if (isLaneClear(inside, aiCars)) {
+                mode = MODE.RETURNING;
+            }
+        } else if (Math.abs(bus.position.x - inside) < 0.4) {
+            mode = MODE.CRUISE;
         }
+
+        targetLaneX = mode === MODE.OVERTAKING ? outside : inside;
 
         // Never aim outside the asphalt
         const edge = ROAD_HALF_WIDTH - bus.userData.width / 2 - 0.3;
@@ -148,21 +180,21 @@ export function createAutopilot(bus, setKey) {
      * Advances the autopilot by one frame.
      * @param {number} dt - Delta time in seconds
      * @param {Array} aiCars - AI traffic the bus has to avoid
-     * @param {Array} [potholes] - Pot holes the AI driver steers around
      */
-    function update(dt, aiCars, potholes) {
+    function update(dt, aiCars) {
         if (!active) return;
 
         const data = bus.userData;
 
-        const ahead = findTrafficAhead(aiCars);
-        chooseLane(ahead);
+        const ahead = findTrafficAhead(aiCars, targetLaneX);
+        chooseLane(ahead, aiCars);
 
-        // The AI driver also dips around holes in the asphalt
-        const holeAhead = findPotholeAt(potholes, targetLaneX, bus.position.z - 12, 3);
-
-        // --- Speed: cruise, brake for traffic, stop if boxed in ---
+        // --- Speed: cruise (faster while passing), brake for traffic, stop if boxed in ---
         let desiredSpeed = Math.min(AUTOPILOT.CRUISE_SPEED, data.maxSpeed * 0.9);
+
+        if (mode === MODE.OVERTAKING) {
+            desiredSpeed = Math.min(data.maxSpeed * 0.95, AUTOPILOT.CRUISE_SPEED + AUTOPILOT.OVERTAKE_BOOST);
+        }
 
         if (ahead) {
             // Keep a two-second-ish gap behind the vehicle in front
@@ -178,11 +210,6 @@ export function createAutopilot(bus, setKey) {
             }
         }
 
-        // Ease off for a pot hole instead of hammering through it
-        if (holeAhead) {
-            desiredSpeed = Math.min(desiredSpeed, desiredSpeed * AUTOPILOT.POTHOLE_SLOWDOWN);
-        }
-
         if (data.speed < desiredSpeed - 0.4) {
             setKey('forward', true);
             setKey('backward', false);
@@ -194,37 +221,17 @@ export function createAutopilot(bus, setKey) {
             setKey('backward', false);
         }
 
-        // --- Steering: turn towards the target lane, then straighten up ---
-        // Steering keys only rotate the bus, so the AI drives a heading that
-        // is proportional to the lateral error and lets the bus drift over.
-        // A positive rotation.y points the bus towards -X, so the heading is
-        // the NEGATIVE of the lane error.
+        // --- Steering: aim at a heading that closes the lane error, then hold it ---
+        // A positive rotation.y points the bus towards -X, so the heading is the
+        // NEGATIVE of the lane error. The steering axis is proportional to how
+        // far the bus is from that heading, so the wheel eases in and out.
         const laneError = targetLaneX - bus.position.x;
         const desiredHeading = Math.max(
             -AUTOPILOT.MAX_HEADING,
             Math.min(AUTOPILOT.MAX_HEADING, -laneError * AUTOPILOT.HEADING_GAIN)
         );
-
         const headingError = desiredHeading - bus.rotation.y;
-
-        if (headingError > AUTOPILOT.STEER_TOLERANCE) {
-            // Steering left increases rotation.y (see updateBusPhysics)
-            setKey('left', true);
-            setKey('right', false);
-        } else if (headingError < -AUTOPILOT.STEER_TOLERANCE) {
-            setKey('left', false);
-            setKey('right', true);
-        } else {
-            setKey('left', false);
-            setKey('right', false);
-
-            // Nudge the heading into the dead zone so it does not creep
-            const correction = Math.min(
-                Math.abs(headingError),
-                PHYSICS.BUS_TURN_SPEED * dt
-            );
-            bus.rotation.y += Math.sign(headingError) * correction;
-        }
+        setSteer(Math.max(-1, Math.min(1, headingError / AUTOPILOT.STEER_FULL)));
 
         // --- Give up when the bus cannot move any more ---
         if (Math.abs(data.speed) < AUTOPILOT.STOPPED_SPEED) {
@@ -245,6 +252,11 @@ export function createAutopilot(bus, setKey) {
         toggle,
         update,
         isActive: () => active,
-        getState: () => ({ active, reason, laneX: targetLaneX })
+        getState: () => ({
+            active,
+            reason,
+            laneX: targetLaneX,
+            overtaking: mode === MODE.OVERTAKING
+        })
     };
 }

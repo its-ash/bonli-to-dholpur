@@ -139,7 +139,10 @@ export const PHYSICS = {
     BUS_MAX_SPEED: 25,
     BUS_ACCELERATION: 15,
     BUS_BRAKE_FORCE: 20,
-    BUS_TURN_SPEED: 1.8,
+    BUS_MAX_STEER: 0.42,     // rad, front-wheel angle at full lock
+    BUS_WHEELBASE: 10,       // distance between the axles (roughly the bus length)
+    BUS_STEER_RATE: 1.6,     // full-lock sweeps per second: the heavy wheel turns smoothly
+    BUS_ROLL: 0.035,         // rad of body lean at full lock and top speed
     BUS_DRAG: 3.0,
     
     CAR_ACCEL_RATE: 4.0,
@@ -155,6 +158,19 @@ export const PHYSICS = {
     CAR_HIT_RECOVERY: 0.8,   // seconds a car needs to recover from an impact
 
     RESPAWN_BUFFER: 50
+};
+
+// --- AI traffic lane changes ---
+// A car stuck behind a slower vehicle switches to the other lane of its
+// direction when that lane is clear around it.
+export const TRAFFIC_LANE_CHANGE = {
+    TRIGGER_GAP: 22,       // gap to the car ahead that makes a car look for a lane change
+    CLEAR_AHEAD: 20,       // the target lane must be empty this far ahead
+    CLEAR_BEHIND: 14,      // ...and this far behind
+    LANE_TOLERANCE: 1.6,   // vehicles closer than this sideways count as in that lane
+    LATERAL_SPEED: 2.2,    // u/s a car may drift sideways
+    COOLDOWN_MIN: 5,       // seconds before a car may change lanes again
+    COOLDOWN_MAX: 10
 };
 
 // Tree placement
@@ -193,15 +209,6 @@ export const SHOP_STRIP_X = GRASS_START_X_OFFSET + GRASS_WIDTH + 2;
 export const SHOP_MIN_GAP = 24;
 export const SHOP_MAX_GAP = 44;
 
-// --- Pot holes ---
-// Nothing appears on the first stretch of road: the player gets a clean run
-// before the asphalt starts breaking up.
-export const POTHOLE_MIN_DISTANCE = 220; // metres from the spawn point
-export const POTHOLE_MIN_GAP = 26;
-export const POTHOLE_MAX_GAP = 70;
-export const POTHOLE_DRAG = 0.55;        // fraction of speed lost per bump
-export const POTHOLE_MIN_SPEED = 4;      // below this a bump barely matters
-
 // --- Roadside dhabas (restaurants) ---
 // Set well back from the asphalt so the terrace and diners stay off the road.
 export const DHABA_X = ROAD_HALF_WIDTH + SHOULDER_WIDTH + 7;
@@ -225,13 +232,38 @@ export const DISTANCE_BOARD_X = 9.5;
 export const AUTOPILOT = {
     CRUISE_SPEED: 20,          // u/s the AI driver aims for
     LOOK_AHEAD: 34,            // how far down the road it scans for traffic
-    OVERTAKE_GAP: 16,          // distance at which it starts changing lanes
+    OVERTAKE_GAP: 30,          // distance at which it starts changing lanes (room to finish the move at speed)
     HEADING_GAIN: 0.22,        // how hard it turns towards its target lane
     MAX_HEADING: 0.32,         // rad, the sharpest heading used to change lanes
-    STEER_TOLERANCE: 0.04,     // rad of heading error before it stops steering
+    STEER_FULL: 0.9,           // rad of heading error that means full steering lock
+    OVERTAKE_BOOST: 4,         // u/s faster than the car being passed
+    OVERTAKE_CLEAR_AHEAD: 26,  // target lane must be empty this far ahead of the bus
+    OVERTAKE_CLEAR_BEHIND: 12, // ...and this far behind it
     EMERGENCY_GAP: 8,          // gap that triggers hard braking
     EMERGENCY_DECEL: 30,       // braking when something is right in front
     STOPPED_TIME_LIMIT: 5.0,   // seconds of <0.6 u/s before autopilot stops
-    STOPPED_SPEED: 0.6,
-    POTHOLE_SLOWDOWN: 0.55     // share of cruise speed when a hole is close
+    STOPPED_SPEED: 0.6
+};
+
+// --- Bus simulation (fuel, stops, passengers, fares, safety, horn) ---
+export const BUS_SIM = {
+    FUEL_CAPACITY: 60,         // litres
+    FUEL_IDLE_RATE: 0.02,      // L/s with the engine running
+    FUEL_DRIVE_RATE: 0.05,     // extra L/s at top speed
+    REFUEL_RATE: 6,            // L/s taken on at a petrol pump
+    PUMP_ZONE: 14,             // metres either side of a pump that count as the forecourt
+    PASSENGER_CAPACITY: 40,
+    FARE: 12,                  // rupees per boarding passenger, scaled by safety
+    STOP_X: -7.6,              // kerb-side shelters sit on the left of the road
+    STOP_KERB_X: 4.5,          // the bus must be within this x distance of the shelter
+    STOP_ZONE: 8,              // metres either side of a shelter that count as the stop
+    STOP_DWELL: 4,             // seconds the doors stay open
+    STOP_SPACING_MIN: 260,
+    STOP_SPACING_MAX: 420,
+    STOP_COUNT: 4,
+    STOP_WAITING_MAX: 6,       // most passengers waiting at one shelter
+    SAFETY_MAX: 100,
+    SAFETY_CAR_HIT: 4,
+    SAFETY_PEDESTRIAN_HIT: 12,
+    HORN_FREQUENCY: 420        // Hz
 };

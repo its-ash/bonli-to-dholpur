@@ -2,8 +2,7 @@
 
 A pixel-art 3D bus driving game built with Three.js. You pull out of an Indian
 bus stand onto a **four-lane highway that never ends**, past roadside dhabas,
-petrol pumps and Hindi distance boards, over pot holes that appear the further
-you drive — with an AUTO DRIVE mode for when you just want to watch.
+petrol pumps and Hindi distance boards — with an AUTO DRIVE mode for when you just want to watch.
 
 Live site: **https://bonli.itsash.in** (GitHub Pages, see `CNAME`)
 
@@ -41,6 +40,7 @@ Three.js r160 is pulled from unpkg via the `<script type="importmap">` in
 | `N` | Next track |
 | `P` | Play / pause music |
 | `M` | Mute |
+| `H` | Horn |
 
 ### Mobile
 
@@ -51,10 +51,26 @@ road stays visible.
 
 ### AUTO DRIVE
 
-The autopilot cruises at highway speed, holds its lane, changes lanes to pass
-slower traffic, eases off for pot holes, and stops itself if the road is blocked
-for too long. Pressing any driving key (or, on desktop, using the music buttons)
-hands control back to you.
+The autopilot cruises at highway speed and keeps its lane. When a slower vehicle
+is ahead and the outside lane is clear, it pulls out, passes, and slides back in
+once the passed vehicle is behind. It stops itself if the road is blocked for too long. Pressing any driving key (or, on desktop, using
+the music buttons) hands control back to you.
+
+Steering is progressive: the wheel swings over in about a second, and a faster
+bus needs a wider turn.
+
+### Bus simulation
+
+- **Fuel** — the 60 L tank burns while the engine runs, faster at speed. Stop on
+  the kerb of a petrol pump's side of the road, next to its forecourt, to refuel.
+  The status line warns when fuel is low or empty.
+- **Bus stops** — kerb-side shelters on the left of the road. Pull into the outside
+  lane beside a shelter and stop: the doors open for four seconds, passengers get
+  off and the people waiting get on. Every boarding passenger pays a ₹12 fare,
+  scaled by the safety score. The bus is held still while the doors are open.
+- **Safety** — each collision with traffic costs 4 points, a pedestrian hit 12
+  A lower safety score means lower fares.
+- **Horn** — `H`.
 
 ---
 
@@ -66,9 +82,9 @@ hands control back to you.
 | Bus stand | `scripts/busstand.js` | The start point — canopy, ticket office, waiting passengers, "बस स्टैंड / बौंली" board |
 | Dhaba restaurants | `scripts/shops.js` | Awning, cooking counter, dining table with diners sitting and eating |
 | Petrol pumps | `scripts/petrolpump.js` | Canopy, two dispensers, cashier kiosk, readable brand board |
-| Pot holes | `scripts/potholes.js` | Hidden for the first 220 m, then scattered through the lanes; each one costs speed and jolts the bus |
+| Bus stops, fuel, fares | `scripts/bussim.js` | Kerb-side shelters with waiting passengers, doors and fares, fuel burn and refuel, safety score, horn |
 | Distance boards | `scripts/signs.js` | बौंली 12 km, सवाई माधोपुर 28 km, धौलपुर 46 km |
-| AI traffic | `scripts/vehicles.js` | Same-direction cars in the near lanes, oncoming traffic across the centre line |
+| AI traffic | `scripts/vehicles.js` | Same-direction cars in the near lanes, oncoming traffic across the centre line; a car stuck behind a slower one changes to the other lane of its direction when that lane is clear |
 | Pedestrians | `scripts/pedestrians.js` | Walking along the verges, recycled around the player |
 | Music | `scripts/music.js` | Plays `song/*.mp3`, auto-advances, starts on the first tap/key press |
 
@@ -90,7 +106,7 @@ scripts/
   constants.js          every tunable (lanes, sizes, speeds, colours)
   camera.js             follow camera + mobile zoom
   input.js              keyboard state + setKey() for the pad/autopilot
-  physics.js            bus movement, collisions, pot hole bumps
+  physics.js            bus movement, collisions
   collision.js          oriented-box (OBB) collision tests
   vehicles.js           bus model, AI car model, traffic AI
   endless.js            endless road + recycled scenery
@@ -99,10 +115,10 @@ scripts/
   petrolpump.js         petrol pumps
   signs.js              distance boards
   busstand.js           starting bus stand
-  potholes.js           pot holes + bump response
   pedestrians.js        pedestrians
   journey.js            distance driven / next town meter
-  autopilot.js          AUTO DRIVE AI driver
+  autopilot.js          AUTO DRIVE AI driver (overtaking)
+  bussim.js             bus stops, passengers, fares, fuel, safety, horn
   hud.js                HUD, AUTO button, music panel, mobile layout
   music.js              music player
   touch.js              touch detection + on-screen pad
@@ -130,8 +146,7 @@ exist, then runs `node --check` on the entry point.
 with a minimal stub for `three` and the DOM, boots `main.js`, then drives the
 game frame by frame. It covers tyres, spawn direction, driving, wheel roll,
 road clamping, AI braking, OBB separation, music behaviour, the heart decal,
-the endless road recycling, dhaba/pump/sign placement, pot hole unlock and
-bump, the four-lane split, the ground/sky follow, and the mobile layout and
+the endless road recycling, dhaba/pump/sign placement, the four-lane split, the ground/sky follow, and the mobile layout and
 camera zoom. Both scripts exit non-zero on failure.
 
 > These tests caught several real bugs during development — an inverted

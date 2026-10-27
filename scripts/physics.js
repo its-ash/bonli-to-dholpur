@@ -3,11 +3,21 @@
 // =============================================
 
 import * as THREE from 'three';
-import { ROAD_HALF_WIDTH, SHOULDER_WIDTH, PHYSICS, POTHOLE_DRAG, POTHOLE_MIN_SPEED } from './constants.js';
+import { ROAD_HALF_WIDTH, SHOULDER_WIDTH, PHYSICS } from './constants.js';
 import { resolveVehicleImpact, getVehicleBox, testBoxOverlap } from './collision.js';
-import { findPotholeAt, applyPotholeBump } from './potholes.js';
 
 const BUS_HALF_WIDTH = 1.25;
+
+/**
+ * Moves a value towards a target by at most `step`, never overshooting.
+ * @param {number} value
+ * @param {number} target
+ * @param {number} step - Largest change allowed this frame (positive)
+ * @returns {number}
+ */
+function moveTowards(value, target, step) {
+    return value < target ? Math.min(target, value + step) : Math.max(target, value - step);
+}
 
 /**
  * Spins the wheels of a vehicle so they roll at the given speed
@@ -31,25 +41,29 @@ function spinWheels(vehicle, distanceTravelled) {
  * Updates bus physics and handles collisions.
  *
  * The road is endless, so nothing here clamps the bus along Z - only the
- * lateral road edges, traffic, pedestrians and pot holes act on it.
+ * lateral road edges, traffic and pedestrians act on it.
  *
  * @param {THREE.Group} bus - The bus group
  * @param {Array<THREE.Group>} aiCars - Array of AI cars
  * @param {Array<THREE.Group>} pedestrians - Array of pedestrians (optional)
  * @param {Object} keys - Input keys state
  * @param {number} dt - Delta time in seconds
- * @param {Object} [extra] - Optional world hooks
- * @param {Array<THREE.Group>} [extra.potholes] - Pot holes to drive over
  */
-export function updateBusPhysics(bus, aiCars, pedestrians, keys, dt, { potholes } = {}) {
+export function updateBusPhysics(bus, aiCars, pedestrians, keys, dt) {
     const data = bus.userData;
     const previousX = bus.position.x;
     const previousZ = bus.position.z;
 
+    // A bus with its doors open at a stop, or with an empty tank, cannot drive
+    const canDrive = !data.doorsOpen && !data.noFuel;
+
     // Acceleration / braking
-    if (keys.forward) {
+    if (data.doorsOpen) {
+        // Held at the kerb while passengers get on and off
+        data.speed = moveTowards(data.speed, 0, data.brakeForce * dt);
+    } else if (canDrive && keys.forward) {
         data.speed = Math.min(data.speed + data.acceleration * dt, data.maxSpeed);
-    } else if (keys.backward) {
+    } else if (canDrive && keys.backward) {
         data.speed = Math.max(data.speed - data.brakeForce * dt, -data.maxSpeed * 0.4);
     } else {
         // Natural deceleration (rolling resistance)
@@ -60,18 +74,23 @@ export function updateBusPhysics(bus, aiCars, pedestrians, keys, dt, { potholes 
         }
     }
 
-    // Steering - only rotate when moving
-    if (Math.abs(data.speed) > 0.1) {
-        const turnDirection = data.speed > 0 ? 1 : -1;
-        const turnAmount = data.turnSpeed * dt * turnDirection;
+    // Steering: the wheel swings towards the input at a limited rate, so the
+    // bus never snaps round. The yaw follows the bicycle model
+    // (yaw rate = speed * tan(wheel angle) / wheelbase): a bus turns wider the
+    // faster it goes, and a stationary bus cannot turn at all.
+    const steerInput = THREE.MathUtils.clamp(
+        (keys.left ? 1 : 0) - (keys.right ? 1 : 0) + (keys.steer || 0), -1, 1
+    );
+    const steerStep = PHYSICS.BUS_STEER_RATE * dt;
+    data.steer += THREE.MathUtils.clamp(steerInput - data.steer, -steerStep, steerStep);
 
-        if (keys.left) {
-            bus.rotation.y += turnAmount;
-        }
-        if (keys.right) {
-            bus.rotation.y -= turnAmount;
-        }
-    }
+    const wheelAngle = data.steer * PHYSICS.BUS_MAX_STEER;
+    bus.rotation.y += (data.speed * Math.tan(wheelAngle) / PHYSICS.BUS_WHEELBASE) * dt;
+
+    // Body lean: the bus rolls away from the turn, more the faster it goes
+    const leanTarget = -data.steer * PHYSICS.BUS_ROLL * Math.min(1, Math.abs(data.speed) / data.maxSpeed);
+    data.roll += (leanTarget - data.roll) * Math.min(1, 4 * dt);
+    bus.rotation.z = data.roll;
 
     // Advance position along bus heading (the models face -Z)
     if (Math.abs(data.speed) > 0.01) {
@@ -99,6 +118,7 @@ export function updateBusPhysics(bus, aiCars, pedestrians, keys, dt, { potholes 
     aiCars.forEach(car => {
         if (resolveVehicleImpact(bus, car)) {
             const impactSpeed = Math.abs(data.speed);
+            if (impactSpeed > 1) data.impacts += 1;
             // Momentum is lost in the crash (heavier bus keeps a share of it)
             data.speed *= PHYSICS.BUS_RESTITUTION;
 
@@ -123,19 +143,10 @@ export function updateBusPhysics(bus, aiCars, pedestrians, keys, dt, { potholes 
             };
 
             if (testBoxOverlap(busBox, pedBox)) {
+                if (Math.abs(data.speed) > 1) data.pedestrianHits += 1;
                 data.speed = 0;
             }
         });
-    }
-
-    // --- Pot holes: a wheel dropping into one shakes the bus and costs speed ---
-    if (data.bumpTimer > 0) {
-        data.bumpTimer = Math.max(0, data.bumpTimer - dt);
-    } else if (potholes && potholes.length > 0) {
-        const hit = findPotholeAt(potholes, bus.position.x, bus.position.z, BUS_HALF_WIDTH * 0.4);
-        if (hit) {
-            applyPotholeBump(bus, hit, { drag: POTHOLE_DRAG, minSpeed: POTHOLE_MIN_SPEED });
-        }
     }
 
     // Roll the wheels based on the distance actually travelled

@@ -15,9 +15,9 @@ const SCRIPTS_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'scripts
 const FILES = [
     'constants.js', 'utils.js', 'environment.js', 'shops.js', 'signs.js',
     'petrolpump.js', 'busstand.js',
-    'potholes.js', 'endless.js', 'vehicles.js',
+    'endless.js', 'vehicles.js',
     'collision.js', 'input.js', 'camera.js', 'physics.js', 'journey.js',
-    'autopilot.js', 'touch.js', 'pedestrians.js', 'hud.js', 'music.js', 'main.js'
+    'autopilot.js', 'bussim.js', 'touch.js', 'pedestrians.js', 'hud.js', 'music.js', 'main.js'
 ];
 
 // ---------------------------------------------------------------- stub THREE
@@ -458,6 +458,8 @@ async function main() {
     car.rotation.y = 0;
     car.userData.targetSpeed = 20;
     car.userData.speed = 20;
+    // Lane changes are tested on their own below; here the car must brake
+    car.userData.laneCooldown = 1e9;
     bus.userData.speed = 0;
 
     const collision = await import(pathToFileURL(join(tempDir, 'collision.js')).href);
@@ -836,6 +838,12 @@ async function main() {
     overtakeCar.userData.speed = 0;
     overtakeCar.userData.targetSpeed = 0;
     overtakeCar.userData.laneX = overtakeCar.position.x;
+    // The stopped car stays put: it is the obstacle being passed
+    overtakeCar.userData.laneCooldown = 1e9;
+    // The passing lane must be empty for the manoeuvre to start
+    cars.forEach(car => {
+        if (car !== overtakeCar && car.position.x < 0) car.position.z = bus.position.z + 200;
+    });
 
     const laneBefore = bus.position.x;
     const zBefore = bus.position.z;
@@ -851,22 +859,34 @@ async function main() {
         bus.position.z < zBefore - 5,
         `z ${zBefore.toFixed(1)} → ${bus.position.z.toFixed(1)}`);
 
+    // Let the pass finish: the bus must get past the stopped car, slide back
+    // into its own lane and do it without touching anything
+    const impactsBeforePass = bus.userData.impacts;
+    for (let i = 0; i < 480; i++) {
+        time += 16.7;
+        animate(time);
+    }
+    check('autopilot passes the stopped car',
+        overtakeCar.position.z > bus.position.z,
+        `car z ${overtakeCar.position.z.toFixed(1)}, bus z ${bus.position.z.toFixed(1)}`);
+    check('autopilot returns to the inside lane after the pass',
+        Math.abs(bus.position.x - constants.LANE_LEFT) < 0.5,
+        `x=${bus.position.x.toFixed(2)}`);
+    check('the overtake happens without a collision',
+        bus.userData.impacts === impactsBeforePass,
+        `impacts ${impactsBeforePass} → ${bus.userData.impacts}`);
+
     // Pressing a driving key hands control back to the player
     globalThis.__listeners.keydown.forEach(fn =>
         fn({ code: 'KeyW', target: { tagName: 'BODY' }, preventDefault() {} }));
     check('pressing a driving key cancels the autopilot', autopilot.isActive() === false);
     globalThis.__listeners.keyup.forEach(fn => fn({ code: 'KeyW' }));
 
-    // -------------------------------------------------- feature: pot holes
-    const potholes = await import(pathToFileURL(join(tempDir, 'potholes.js')).href);
-    const holeStateBefore = world.getState().potholesEnabled;
-
-    // Drive a long way: the holes must switch on after POTHOLE_MIN_DISTANCE
-    cars.forEach((car, i) => car.position.set(-40 - i, 0, bus.position.z - 600));
+    // ------------------------------------------------ feature: distance driven
     bus.position.set(constants.LANE_LEFT, 0, constants.PLAYER_START_Z);
+    cars.forEach(car => { car.position.z = bus.position.z + 200; });
     bus.rotation.y = 0;
     bus.userData.speed = 0;
-    world.potholes.forEach(hole => { hole.visible = false; });
 
     press('KeyW');
     for (let i = 0; i < 900; i++) {
@@ -877,34 +897,9 @@ async function main() {
 
     const driven = world.travelledDistance();
     check('driving accumulates distance travelled',
-        driven > constants.POTHOLE_MIN_DISTANCE,
-        `${driven.toFixed(0)} m driven (holes unlock at ${constants.POTHOLE_MIN_DISTANCE})`);
-    check('pot holes appear only after some distance',
-        holeStateBefore === false && world.getState().potholesEnabled === true);
-    check('pot holes are laid out on the road',
-        world.potholes.every(hole => Math.abs(hole.position.x) <= constants.ROAD_HALF_WIDTH) &&
-        world.potholes.some(hole => hole.visible),
-        `${world.potholes.filter(hole => hole.visible).length} visible`);
-    check('pot holes sit inside the lanes, clear of the centre line',
-        // Lane centres are ±1.5 and ±4.5 with a small jitter, so every hole must
-        // stay well to one side of the divider at x = 0.
-        world.potholes.every(hole => Math.abs(hole.position.x) > 0.8) &&
-        world.potholes.some(hole => Math.abs(hole.position.x) > 3),
-        `closest to centre x=${Math.min(...world.potholes.map(h => Math.abs(h.position.x))).toFixed(2)}`);
-    const testHole = world.potholes[0];
-    testHole.position.set(bus.position.x, 0.03, bus.position.z);
-    testHole.visible = true;
-    bus.userData.speed = 18;
-    bus.userData.bumpTimer = 0;
-    const speedBeforeBump = bus.userData.speed;
-    animate((time += 16.7));
-    check('driving into a pot hole costs the bus speed',
-        Math.abs(bus.userData.speed) < speedBeforeBump,
-        `${speedBeforeBump.toFixed(1)} → ${bus.userData.speed.toFixed(1)} u/s`);
-    check('a pot hole triggers a visible jolt', bus.userData.bumpTimer > 0,
-        `bumpTimer=${(bus.userData.bumpTimer || 0).toFixed(2)}`);
-    check('findPotholeAt locates the hole under the bus',
-        potholes.findPotholeAt(world.potholes, bus.position.x, bus.position.z, 0.4) !== null);
+        driven > 0, `${driven.toFixed(0)} m driven`);
+    check('the road has no pot holes',
+        world.getState().potholesEnabled === undefined && world.potholes === undefined);
 
     // ----------------------------------------------- feature: the endless road
     const roadBefore = world.segments.map(segment => segment.position.z);
@@ -1007,7 +1002,122 @@ async function main() {
 
     input.releaseAllKeys();
     check('releaseAllKeys clears every direction',
-        Object.values(input.getKeys()).every(v => v === false));
+        Object.entries(input.getKeys()).every(([key, v]) => key === 'steer' ? v === 0 : v === false));
+
+    // Releases the driving keys through the same events the browser sends
+    const releaseDrivingKeys = () => {
+        ['KeyW', 'KeyA', 'KeyS', 'KeyD'].forEach(code =>
+            globalThis.__listeners.keyup.forEach(fn => fn({ code })));
+    };
+    const frames = (count) => {
+        for (let i = 0; i < count; i++) {
+            time += 16.7;
+            animate(time);
+        }
+    };
+
+    // ------------------------------------- feature: traffic lane changes
+    // A car stuck behind a slower car should move into the clear outside lane.
+    // The two cars are kept clear of the bus's road-end recycling band.
+    cars.forEach(car => {
+        if (car !== cars[0] && car !== cars[2]) car.position.z = bus.position.z + 200;
+    });
+    cars[0].position.set(constants.LANE_LEFT, 0, bus.position.z - 150);
+    cars[0].userData.laneX = constants.LANE_LEFT;
+    cars[0].userData.speed = cars[0].userData.targetSpeed = 12;
+    cars[2].position.set(constants.LANE_LEFT, 0, bus.position.z - 165);
+    cars[2].userData.laneX = constants.LANE_LEFT;
+    cars[2].userData.speed = cars[2].userData.targetSpeed = 2;
+    cars.slice(0, 3).forEach(car => { car.userData.laneCooldown = 0; });
+    frames(120);
+    check('a car stuck behind a slower car changes to the free lane',
+        cars[0].userData.laneX === constants.LANE_LEFT_OUTER &&
+        Math.abs(cars[0].position.x - constants.LANE_LEFT_OUTER) < 0.5,
+        `laneX=${cars[0].userData.laneX}, x=${cars[0].position.x.toFixed(2)}`);
+
+    // ------------------------------------- feature: smooth bus steering
+    releaseDrivingKeys();
+    bus.position.x = constants.LANE_LEFT;
+    bus.rotation.y = 0;
+    bus.userData.speed = 15;
+    bus.userData.steer = 0;
+    globalThis.__listeners.keydown.forEach(fn => fn({ code: 'KeyA', preventDefault() {} }));
+    frames(1);
+    const firstFrameSteer = bus.userData.steer;
+    frames(60);
+    check('steering builds up gradually, not in one frame',
+        firstFrameSteer > 0 && firstFrameSteer < 0.05,
+        `after one frame steer=${firstFrameSteer.toFixed(3)}`);
+    check('a full left turn reaches full lock within a second',
+        bus.userData.steer > 0.95, `steer=${bus.userData.steer.toFixed(2)}`);
+    check('the bus yaws left while the wheel is turned',
+        bus.rotation.y > 0.1, `yaw=${bus.rotation.y.toFixed(2)}`);
+    releaseDrivingKeys();
+    frames(60);
+    check('the steering wheel returns to centre when released',
+        Math.abs(bus.userData.steer) < 0.05, `steer=${bus.userData.steer.toFixed(3)}`);
+
+    // ------------------------------------- feature: bus simulation
+    // The bus is reset to its lane and reversed for the fuel check, so the
+    // road distance is not changed by these tests
+    const sim = globalThis.__busSim;
+    // Traffic is taken out of the simulation for these checks, so no car can
+    // hit the bus while it is teleported around; it is put back afterwards
+    const parkedTraffic = globalThis.__aiCars.splice(0);
+
+    // Checked first: later reverse driving can run into traffic and push the
+    // safety score down before this check
+    const safetyBeforeCrash = sim.getState().safety;
+    bus.userData.impacts += 2;
+    frames(1);
+    check('a crash lowers the safety score',
+        safetyBeforeCrash - sim.getState().safety >= 8,
+        `safety ${safetyBeforeCrash} → ${sim.getState().safety}`);
+
+    bus.position.x = constants.LANE_LEFT;
+    bus.rotation.y = 0;
+    bus.userData.speed = 0;
+    globalThis.__listeners.keydown.forEach(fn => fn({ code: 'KeyS', target: { tagName: 'BODY' }, preventDefault() {} }));
+    const fuelBeforeDriving = sim.getState().fuelPercent;
+    frames(1200);
+    releaseDrivingKeys();
+    check('the engine burns fuel while the bus moves',
+        sim.getState().fuelPercent < fuelBeforeDriving,
+        `fuel ${fuelBeforeDriving}% → ${sim.getState().fuelPercent}%`);
+
+    const pump = globalThis.__world.pumps[0];
+    bus.position.set(-4.5, 0, pump.position.z);
+    bus.userData.speed = 0;
+    const fuelAtPump = sim.getState().fuelPercent;
+    frames(60);
+    check('stopping at a petrol pump refuels the bus',
+        sim.getState().fuelPercent > fuelAtPump,
+        `fuel ${fuelAtPump}% → ${sim.getState().fuelPercent}%`);
+
+    const stop = sim.stops[0];
+    stop.userData.served = false;
+    stop.userData.waiting = 5;
+    const faresBeforeStop = sim.getState().fares;
+    bus.position.set(-4.5, 0, stop.position.z);
+    bus.userData.speed = 0;
+    frames(1);
+    check('the doors open for passengers at a kerb-side bus stop',
+        sim.getState().doorsOpen === true && stop.userData.served === true);
+    check('boarding passengers pay a fare',
+        sim.getState().fares > faresBeforeStop,
+        `fares ${faresBeforeStop} → ${sim.getState().fares}`);
+
+    globalThis.__listeners.keydown.forEach(fn => fn({ code: 'KeyW', target: { tagName: 'BODY' }, preventDefault() {} }));
+    frames(120);
+    check('the open doors hold the bus still',
+        bus.userData.speed === 0, `speed=${bus.userData.speed.toFixed(2)}`);
+    frames(240);
+    releaseDrivingKeys();
+    check('the doors close after the stop',
+        sim.getState().doorsOpen === false);
+
+
+    globalThis.__aiCars.push(...parkedTraffic);
 
     // ------------------------------- feature: mobile single-button layout
     const hudModule = await import(pathToFileURL(join(tempDir, 'hud.js')).href);

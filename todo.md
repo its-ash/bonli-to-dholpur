@@ -59,3 +59,20 @@ Request: Create a Three.js bus driving game with the following specifications:
 - [x] Fixed music not playing on phones. `startOnFirstInteraction()` used to remove its listeners on the very first gesture even when `play()` had been rejected. Mobile browsers routinely reject that first attempt (media not decoded yet / untrusted gesture), so music was silently disabled for the whole session — and on mobile there are no music buttons left to retry with. The listeners now stay armed until playback actually succeeds, and cover `pointerdown`, `touchstart`, `touchend`, `click` and `keydown` in the capture phase.
 - [x] Added `README.md`: quick start (ES modules need an HTTP server), keyboard and mobile controls, AUTO DRIVE behaviour, a table of every world feature with its source file, the project layout, how to run both test scripts, how to add a song, and the known limitations.
 - [x] Verification: `scripts/smoke.mjs` now covers segments, dhabas (position + diners + readable sign), petrol pumps, distance boards, pot holes (unlock + bump), the bus stand, all four lanes, the ground/sky follow, and the mobile layout/zoom. Two real bugs were caught this way: the `isHudMobileLayout` check reading normalised inline styles, and the HUD's music-button hiding needing a `document.querySelector` stub.
+
+## Overtaking, smooth steering, bus simulation
+
+- [x] Four-lane road: the road was already built as four 3-unit lanes (x = −4.5, −1.5, +1.5, +4.5). Traffic now uses both lanes of its direction (same-direction cars in the two negative-X lanes, oncoming in the two positive-X lanes), so the bus can pass in the outside lane.
+- [x] AUTO overtakes: the autopilot pulls into the outside lane when a slower car is within `AUTOPILOT.OVERTAKE_GAP` (30) and that lane is clear, boosts speed, passes, and slides back once the inside lane is clear behind it. It only brakes for traffic in the lane it is moving into. `scripts/smoke.mjs` runs the full pass and checks there is no collision.
+- [x] Smooth bus steering: `physics.js` swings a steer angle towards the input at `BUS_STEER_RATE` (full lock in about a second) and yaws the bus with the bicycle model (`speed * tan(angle) / BUS_WHEELBASE`), so the bus turns wider at speed and a stopped bus cannot turn. The body leans into the turn. The autopilot drives the same wheel through an analog `setSteer` axis instead of toggling left/right.
+- [x] Bus simulation (`scripts/bussim.js`, tuned in `BUS_SIM` in `constants.js`): fuel burns while driving and is refilled at a petrol pump (stop on the kerb beside the forecourt); kerb-side bus stops where stopping in the outside lane opens the doors for 4 s, passengers alight and board, and each boarding passenger pays ₹12 scaled by a safety score; the safety score falls with traffic collisions, pedestrian hits and pot holes; the horn is on `H`; the HUD shows fuel, passengers, fares and safety.
+- [x] Verification: `node scripts/verify.mjs` and `node scripts/smoke.mjs` both pass. The browser visuals of the new stops and shelters were not checked in a browser here.
+
+## Remove pot holes
+
+- [x] Removed the pot holes from the road: `scripts/potholes.js` is deleted, along with the road recycling, the physics bump, the AUTO slow-down for holes, the HUD warning, the safety penalty, the `POTHOLE_*` constants, and their tests and README entries.
+
+## AI traffic lane changes
+
+- [x] `scripts/vehicles.js`: a car stuck behind a slower vehicle (`speedAhead < targetSpeed - 2` within `TRAFFIC_LANE_CHANGE.TRIGGER_GAP`) switches to the other lane of its direction when `isLaneFree` confirms that lane is clear of cars and the bus, then has a random cooldown. Sideways motion is rate-limited (`LATERAL_SPEED`) instead of snapping to the lane centre.
+- [x] `scripts/smoke.mjs`: checks that a stuck car moves into the free lane; the bus simulation checks take traffic off the road so they are not disturbed by it.

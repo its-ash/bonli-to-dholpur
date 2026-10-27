@@ -6,8 +6,7 @@
 // allocating new objects.
 //
 // This module owns the 4-lane road surface, the trees, the dhabas, the petrol
-// pumps, the distance boards and the pot holes (which only start appearing
-// after POTHOLE_MIN_DISTANCE). The bus stand belongs to the start of the
+// pumps and the distance boards. The bus stand belongs to the start of the
 // journey and is added once by main.js.
 // =============================================
 
@@ -15,7 +14,6 @@ import * as THREE from 'three';
 import {
     SEGMENT_LENGTH, SEGMENT_COUNT, SEGMENT_RECYCLE_BEHIND,
     ROAD_WIDTH, SHOULDER_WIDTH, ROAD_HALF_WIDTH, ROAD_LENGTH, PLAYER_START_Z,
-    POTHOLE_MIN_DISTANCE, POTHOLE_MIN_GAP, POTHOLE_MAX_GAP,
     DHABA_X, DHABA_GAP_MIN, DHABA_GAP_MAX,
     DISTANCE_BOARDS, DISTANCE_BOARD_X
 } from './constants.js';
@@ -24,7 +22,6 @@ import { createRoadsideTree } from './environment.js';
 import { createDhaba } from './shops.js';
 import { createPetrolPump } from './petrolpump.js';
 import { createDistanceBoard } from './signs.js';
-import { createPothole, randomPotholeX } from './potholes.js';
 
 // How far behind the bus a piece of scenery may drift before it is recycled
 const SCENERY_BEHIND = 80;
@@ -150,42 +147,12 @@ export function createEndlessWorld({ bus, scene }) {
         board.position.z = startZ - 60 - i * boardGap;
     });
 
-    // --- Pot holes -------------------------------------------------------
-    // Created up-front but hidden: they only appear once the bus has driven
-    // POTHOLE_MIN_DISTANCE, so the first stretch of road stays smooth.
-    const potholes = [];
-    const POTHOLE_COUNT = 12;
-    for (let i = 0; i < POTHOLE_COUNT; i++) {
-        const hole = createPothole({ x: randomPotholeX(), z: 0, radius: 1.0 + Math.random() * 0.5 });
-        hole.visible = false;
-        scene.add(hole);
-        potholes.push(hole);
-    }
-
     // --- State -----------------------------------------------------------
     const state = {
         distance: 0,
-        potholesEnabled: false,
         lastBusZ: bus.position.z,
         recycled: 0
     };
-
-    /**
-     * Turns the pot holes on and scatters them down the road ahead.
-     */
-    function enablePotholes() {
-        if (state.potholesEnabled) return;
-
-        state.potholesEnabled = true;
-        let z = bus.position.z - POTHOLE_MIN_GAP;
-
-        for (const hole of potholes) {
-            hole.visible = true;
-            hole.position.x = randomPotholeX();
-            hole.position.z = z;
-            z -= POTHOLE_MIN_GAP + Math.random() * (POTHOLE_MAX_GAP - POTHOLE_MIN_GAP);
-        }
-    }
 
     /**
      * Puts a dhaba somewhere along the road, on its own side, always set back
@@ -273,28 +240,11 @@ export function createEndlessWorld({ bus, scene }) {
             place: placeBoard
         });
 
-        // --- Pot holes: only after the clean opening stretch ---
-        if (!state.potholesEnabled && state.distance >= POTHOLE_MIN_DISTANCE) {
-            enablePotholes();
-        }
-        if (state.potholesEnabled) {
-            recycleBehind(potholes, busZ, {
-                behind: 40,
-                spacing: POTHOLE_MIN_GAP,
-                gapFor: () => POTHOLE_MIN_GAP + Math.random() * (POTHOLE_MAX_GAP - POTHOLE_MIN_GAP),
-                place: (hole, z) => {
-                    hole.position.z = z;
-                    hole.position.x = randomPotholeX();
-                }
-            });
-        }
-
         return state;
     }
 
     /**
-     * How far the bus has actually driven (used to unlock the pot holes and by
-     * the HUD).
+     * How far the bus has actually driven (used by the HUD).
      * @returns {number}
      */
     function travelledDistance() {
@@ -307,18 +257,14 @@ export function createEndlessWorld({ bus, scene }) {
         dhabas,
         pumps,
         boards,
-        potholes,
         update,
-        enablePotholes,
         travelledDistance,
         getState: () => ({
             distance: state.distance,
-            potholesEnabled: state.potholesEnabled,
             segmentCount: segments.length,
             dhabaCount: dhabas.length,
             pumpCount: pumps.length,
-            boardCount: boards.length,
-            potholeCount: potholes.length
+            boardCount: boards.length
         }),
         /** Nominal road length ahead of the spawn point */
         roadLength: ROAD_LENGTH
