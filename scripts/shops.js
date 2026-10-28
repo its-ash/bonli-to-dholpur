@@ -9,6 +9,7 @@
 // =============================================
 
 import * as THREE from 'three';
+import { roundedBox } from './rounded.js';
 
 // Pixel-art palettes: one entry per dhaba "flavour"
 const DHABA_VARIANTS = [
@@ -142,16 +143,16 @@ function createDiner({ shirt, skin }, facingRoad) {
     const diner = new THREE.Group();
 
     const torso = new THREE.Mesh(
-        new THREE.BoxGeometry(0.32, 0.42, 0.2),
-        new THREE.MeshLambertMaterial({ color: shirt, flatShading: true })
+        roundedBox(0.32, 0.42, 0.2),
+        new THREE.MeshLambertMaterial({ color: shirt })
     );
     torso.position.y = 0.66;
     torso.castShadow = true;
     diner.add(torso);
 
     const head = new THREE.Mesh(
-        new THREE.BoxGeometry(0.2, 0.2, 0.2),
-        new THREE.MeshLambertMaterial({ color: skin, flatShading: true })
+        roundedBox(0.2, 0.2, 0.2),
+        new THREE.MeshLambertMaterial({ color: skin })
     );
     head.position.y = 0.98;
     head.castShadow = true;
@@ -159,8 +160,8 @@ function createDiner({ shirt, skin }, facingRoad) {
 
     // Legs stick out towards the table
     const legs = new THREE.Mesh(
-        new THREE.BoxGeometry(0.28, 0.16, 0.34),
-        new THREE.MeshLambertMaterial({ color: 0x2C3E50, flatShading: true })
+        roundedBox(0.28, 0.16, 0.34),
+        new THREE.MeshLambertMaterial({ color: 0x2C3E50 })
     );
     legs.position.set(0, 0.44, 0.14);
     legs.castShadow = true;
@@ -168,8 +169,8 @@ function createDiner({ shirt, skin }, facingRoad) {
 
     // Arms resting on the table
     const arms = new THREE.Mesh(
-        new THREE.BoxGeometry(0.36, 0.1, 0.26),
-        new THREE.MeshLambertMaterial({ color: skin, flatShading: true })
+        roundedBox(0.36, 0.1, 0.26),
+        new THREE.MeshLambertMaterial({ color: skin })
     );
     arms.position.set(0, 0.58, 0.16);
     diner.add(arms);
@@ -177,7 +178,7 @@ function createDiner({ shirt, skin }, facingRoad) {
     // Plate on the table in front of them
     const plate = new THREE.Mesh(
         new THREE.CylinderGeometry(0.11, 0.11, 0.03, 6),
-        new THREE.MeshLambertMaterial({ color: 0xF2F2F2, flatShading: true })
+        new THREE.MeshLambertMaterial({ color: 0xF2F2F2 })
     );
     plate.position.set(0, 0.56, 0.42);
     diner.add(plate);
@@ -209,8 +210,8 @@ export function createDhaba(side = 1, variant = 0) {
 
     // --- Paved forecourt, so the diners are clearly off the road ---
     const forecourt = new THREE.Mesh(
-        new THREE.BoxGeometry(alongX + 8, 0.08, alongZ + 6),
-        new THREE.MeshLambertMaterial({ color: 0xC8C0AE, flatShading: true })
+        roundedBox(alongX + 8, 0.08, alongZ + 6),
+        new THREE.MeshLambertMaterial({ color: 0xC8C0AE })
     );
     forecourt.position.set(front * 3.2, 0.04, 0);
     forecourt.receiveShadow = true;
@@ -218,8 +219,8 @@ export function createDhaba(side = 1, variant = 0) {
 
     // --- Main wall block ---
     const walls = new THREE.Mesh(
-        new THREE.BoxGeometry(alongX, height, alongZ),
-        new THREE.MeshLambertMaterial({ color: colors.wall, flatShading: true })
+        roundedBox(alongX, height, alongZ),
+        new THREE.MeshLambertMaterial({ color: colors.wall })
     );
     walls.position.y = height / 2;
     walls.castShadow = true;
@@ -228,16 +229,16 @@ export function createDhaba(side = 1, variant = 0) {
 
     // --- Painted trim strip along the bottom of the wall ---
     const trim = new THREE.Mesh(
-        new THREE.BoxGeometry(0.08, 0.5, alongZ * 0.98),
-        new THREE.MeshLambertMaterial({ color: colors.trim, flatShading: true })
+        roundedBox(0.08, 0.5, alongZ * 0.98),
+        new THREE.MeshLambertMaterial({ color: colors.trim })
     );
     trim.position.set(front * (alongX / 2 + 0.02), 0.25, 0);
     dhaba.add(trim);
 
     // --- Roof slab with an overhang ---
     const roof = new THREE.Mesh(
-        new THREE.BoxGeometry(alongX + 1.6, 0.35, alongZ + 0.8),
-        new THREE.MeshLambertMaterial({ color: colors.roof, flatShading: true })
+        roundedBox(alongX + 1.6, 0.35, alongZ + 0.8),
+        new THREE.MeshLambertMaterial({ color: colors.roof })
     );
     roof.position.set(front * 0.4, height + 0.15, 0);
     roof.castShadow = true;
@@ -248,10 +249,9 @@ export function createDhaba(side = 1, variant = 0) {
     const stripeZ = alongZ / stripeCount;
     for (let i = 0; i < stripeCount; i++) {
         const stripe = new THREE.Mesh(
-            new THREE.BoxGeometry(2.6, 0.12, stripeZ),
+            roundedBox(2.6, 0.12, stripeZ),
             new THREE.MeshLambertMaterial({
-                color: colors.awning[i % colors.awning.length],
-                flatShading: true
+                color: colors.awning[i % colors.awning.length]
             })
         );
         stripe.position.set(
@@ -266,8 +266,8 @@ export function createDhaba(side = 1, variant = 0) {
     // Awning support posts
     [-1, 1].forEach(end => {
         const post = new THREE.Mesh(
-            new THREE.BoxGeometry(0.12, height - 0.3, 0.12),
-            new THREE.MeshLambertMaterial({ color: colors.trim, flatShading: true })
+            roundedBox(0.12, height - 0.3, 0.12),
+            new THREE.MeshLambertMaterial({ color: colors.trim })
         );
         post.position.set(front * (alongX / 2 + 2.2), (height - 0.3) / 2, end * (alongZ / 2 - 0.4));
         post.castShadow = true;
@@ -297,8 +297,8 @@ export function createDhaba(side = 1, variant = 0) {
 
     // --- Open kitchen counter facing the terrace ---
     const counter = new THREE.Mesh(
-        new THREE.BoxGeometry(1.0, 1.0, alongZ * 0.45),
-        new THREE.MeshLambertMaterial({ color: 0x8B5A2B, flatShading: true })
+        roundedBox(1.0, 1.0, alongZ * 0.45),
+        new THREE.MeshLambertMaterial({ color: 0x8B5A2B })
     );
     counter.position.set(front * (alongX / 2 + 0.5), 0.5, -alongZ * 0.22);
     counter.castShadow = true;
@@ -308,7 +308,7 @@ export function createDhaba(side = 1, variant = 0) {
     [-0.9, 0.9].forEach(offset => {
         const pot = new THREE.Mesh(
             new THREE.CylinderGeometry(0.26, 0.22, 0.3, 6),
-            new THREE.MeshLambertMaterial({ color: 0x9AA0A6, flatShading: true })
+            new THREE.MeshLambertMaterial({ color: 0x9AA0A6 })
         );
         pot.position.set(front * (alongX / 2 + 0.5), 1.15, -alongZ * 0.22 + offset);
         pot.castShadow = true;
@@ -319,8 +319,8 @@ export function createDhaba(side = 1, variant = 0) {
     const terraceZ = alongZ * 0.28;
 
     const table = new THREE.Mesh(
-        new THREE.BoxGeometry(1.5, 0.1, 3.4),
-        new THREE.MeshLambertMaterial({ color: 0xC9A227, flatShading: true })
+        roundedBox(1.5, 0.1, 3.4),
+        new THREE.MeshLambertMaterial({ color: 0xC9A227 })
     );
     table.position.set(front * (alongX / 2 + 1.8), 0.7, terraceZ);
     table.castShadow = true;
@@ -330,8 +330,8 @@ export function createDhaba(side = 1, variant = 0) {
     // Table legs
     [-1.4, 1.4].forEach(offset => {
         const leg = new THREE.Mesh(
-            new THREE.BoxGeometry(1.3, 0.7, 0.12),
-            new THREE.MeshLambertMaterial({ color: 0x6B4423, flatShading: true })
+            roundedBox(1.3, 0.7, 0.12),
+            new THREE.MeshLambertMaterial({ color: 0x6B4423 })
         );
         leg.position.set(front * (alongX / 2 + 1.8), 0.35, terraceZ + offset);
         dhaba.add(leg);
@@ -340,8 +340,8 @@ export function createDhaba(side = 1, variant = 0) {
     // Benches on both sides of the table
     [-1, 1].forEach(benchSide => {
         const bench = new THREE.Mesh(
-            new THREE.BoxGeometry(0.55, 0.42, 3.1),
-            new THREE.MeshLambertMaterial({ color: 0x8B5A2B, flatShading: true })
+            roundedBox(0.55, 0.42, 3.1),
+            new THREE.MeshLambertMaterial({ color: 0x8B5A2B })
         );
         bench.position.set(
             front * (alongX / 2 + 1.8) + benchSide * 1.0,
@@ -376,9 +376,9 @@ export function createDhaba(side = 1, variant = 0) {
     }
 
     // --- A parked scooter-style crate stack beside the counter ---
-    const crateMaterial = new THREE.MeshLambertMaterial({ color: 0xB08C58, flatShading: true });
+    const crateMaterial = new THREE.MeshLambertMaterial({ color: 0xB08C58 });
     for (let i = 0; i < 2; i++) {
-        const crate = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.7, 0.7), crateMaterial);
+        const crate = new THREE.Mesh(roundedBox(0.7, 0.7, 0.7), crateMaterial);
         crate.position.set(front * (alongX / 2 + 0.6), 0.35 + i * 0.7, alongZ * 0.42);
         crate.castShadow = true;
         dhaba.add(crate);

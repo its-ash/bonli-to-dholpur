@@ -200,6 +200,8 @@ function verifyRequirements(scriptContent, allScriptContents) {
         setKey: /export function setKey/,
         setSteer: /export function setSteer/,
         createBusSim: /export function createBusSim/,
+        createLandscape: /export function createLandscape/,
+        roundedBox: /export function roundedBox/,
     };
     
     log(`\nChecking exported functions:`);
@@ -248,6 +250,8 @@ function main() {
         'journey.js',
         'autopilot.js',
         'bussim.js',
+        'rounded.js',
+        'landscape.js',
         'touch.js',
         'pedestrians.js',
         'hud.js',

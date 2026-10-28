@@ -83,6 +83,7 @@ bus needs a wider turn.
 | Dhaba restaurants | `scripts/shops.js` | Awning, cooking counter, dining table with diners sitting and eating |
 | Petrol pumps | `scripts/petrolpump.js` | Canopy, two dispensers, cashier kiosk, readable brand board |
 | Bus stops, fuel, fares | `scripts/bussim.js` | Kerb-side shelters with waiting passengers, doors and fares, fuel burn and refuel, safety score, horn |
+| Forests, ponds, lakes, mountains | `scripts/landscape.js` | Instanced pine/broadleaf forests, ponds with reeds and lily pads, lakes with a jetty and a bobbing boat, rugged mountain ranges coloured by height with snow caps; all recycled along the road, and trees never stand in water |
 | Distance boards | `scripts/signs.js` | बौंली 12 km, सवाई माधोपुर 28 km, धौलपुर 46 km |
 | AI traffic | `scripts/vehicles.js` | Same-direction cars in the near lanes, oncoming traffic across the centre line; a car stuck behind a slower one changes to the other lane of its direction when that lane is clear |
 | Pedestrians | `scripts/pedestrians.js` | Walking along the verges, recycled around the player |
@@ -119,6 +120,8 @@ scripts/
   journey.js            distance driven / next town meter
   autopilot.js          AUTO DRIVE AI driver (overtaking)
   bussim.js             bus stops, passengers, fares, fuel, safety, horn
+  landscape.js          forests, ponds, lakes, mountains
+  rounded.js            roundedBox(): rounded-edge boxes for vehicles and buildings
   hud.js                HUD, AUTO button, music panel, mobile layout
   music.js              music player
   touch.js              touch detection + on-screen pad

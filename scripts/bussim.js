@@ -10,6 +10,7 @@
 import * as THREE from 'three';
 import { BUS_SIM, PLAYER_START_Z } from './constants.js';
 import { recycleBehind } from './endless.js';
+import { roundedBox } from './rounded.js';
 
 const SIGN_FONT = '"Noto Sans Devanagari", "Nirmala UI", sans-serif';
 
@@ -60,9 +61,9 @@ function createStopSignTexture() {
 function createBusStop() {
     const stop = new THREE.Group();
 
-    const frame = new THREE.MeshLambertMaterial({ color: 0xB0B0B0, flatShading: true });
-    const roof = new THREE.MeshLambertMaterial({ color: 0x2E7D32, flatShading: true });
-    const bench = new THREE.MeshLambertMaterial({ color: 0x8B5A2B, flatShading: true });
+    const frame = new THREE.MeshLambertMaterial({ color: 0xB0B0B0 });
+    const roof = new THREE.MeshLambertMaterial({ color: 0x2E7D32 });
+    const bench = new THREE.MeshLambertMaterial({ color: 0x8B5A2B });
 
     const add = (geometry, material, x, y, z) => {
         const mesh = new THREE.Mesh(geometry, material);
@@ -73,11 +74,11 @@ function createBusStop() {
         return mesh;
     };
 
-    add(new THREE.BoxGeometry(0.15, 2.4, 3.2), roof, -0.9, 1.2, 0);       // back wall
-    add(new THREE.BoxGeometry(2.2, 0.2, 3.4), roof, -0.45, 2.5, 0);       // roof
-    add(new THREE.BoxGeometry(0.12, 2.5, 0.12), frame, 0.5, 1.25, -1.5);  // front posts
-    add(new THREE.BoxGeometry(0.12, 2.5, 0.12), frame, 0.5, 1.25, 1.5);
-    add(new THREE.BoxGeometry(0.6, 0.12, 2.6), bench, -0.5, 0.45, 0);     // bench
+    add(roundedBox(0.15, 2.4, 3.2), roof, -0.9, 1.2, 0);       // back wall
+    add(roundedBox(2.2, 0.2, 3.4), roof, -0.45, 2.5, 0);       // roof
+    add(roundedBox(0.12, 2.5, 0.12), frame, 0.5, 1.25, -1.5);  // front posts
+    add(roundedBox(0.12, 2.5, 0.12), frame, 0.5, 1.25, 1.5);
+    add(roundedBox(0.6, 0.12, 2.6), bench, -0.5, 0.45, 0);     // bench
 
     const signTexture = createStopSignTexture();
     const sign = new THREE.Mesh(

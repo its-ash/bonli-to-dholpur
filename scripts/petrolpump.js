@@ -6,6 +6,7 @@
 // =============================================
 
 import * as THREE from 'three';
+import { roundedBox } from './rounded.js';
 
 const SIGN_FONT = '"Noto Sans Devanagari", "Nirmala UI", sans-serif';
 
@@ -92,8 +93,8 @@ function createDispenser(trim) {
     const dispenser = new THREE.Group();
 
     const body = new THREE.Mesh(
-        new THREE.BoxGeometry(0.7, 1.7, 0.5),
-        new THREE.MeshLambertMaterial({ color: 0xE8E8E8, flatShading: true })
+        roundedBox(0.7, 1.7, 0.5),
+        new THREE.MeshLambertMaterial({ color: 0xE8E8E8 })
     );
     body.position.y = 0.95;
     body.castShadow = true;
@@ -101,8 +102,8 @@ function createDispenser(trim) {
 
     // Branded side panel
     const panel = new THREE.Mesh(
-        new THREE.BoxGeometry(0.74, 0.45, 0.54),
-        new THREE.MeshLambertMaterial({ color: trim, flatShading: true })
+        roundedBox(0.74, 0.45, 0.54),
+        new THREE.MeshLambertMaterial({ color: trim })
     );
     panel.position.y = 1.55;
     dispenser.add(panel);
@@ -117,16 +118,16 @@ function createDispenser(trim) {
 
     // Base plinth
     const base = new THREE.Mesh(
-        new THREE.BoxGeometry(1.0, 0.2, 0.8),
-        new THREE.MeshLambertMaterial({ color: 0x9AA0A6, flatShading: true })
+        roundedBox(1.0, 0.2, 0.8),
+        new THREE.MeshLambertMaterial({ color: 0x9AA0A6 })
     );
     base.position.y = 0.1;
     dispenser.add(base);
 
     // Hose arm reaching over the car
     const arm = new THREE.Mesh(
-        new THREE.BoxGeometry(0.08, 0.08, 0.9),
-        new THREE.MeshLambertMaterial({ color: 0x2F2F2F, flatShading: true })
+        roundedBox(0.08, 0.08, 0.9),
+        new THREE.MeshLambertMaterial({ color: 0x2F2F2F })
     );
     arm.position.set(0, 1.72, 0.55);
     dispenser.add(arm);
@@ -158,8 +159,8 @@ export function createPetrolPump(side = 1, variant = 0) {
 
     // --- Concrete forecourt ---
     const forecourt = new THREE.Mesh(
-        new THREE.BoxGeometry(forecourtX, 0.2, forecourtZ),
-        new THREE.MeshLambertMaterial({ color: 0xC2C2C2, flatShading: true })
+        roundedBox(forecourtX, 0.2, forecourtZ),
+        new THREE.MeshLambertMaterial({ color: 0xC2C2C2 })
     );
     forecourt.position.set(0, 0.1, 0);
     forecourt.receiveShadow = true;
@@ -167,16 +168,16 @@ export function createPetrolPump(side = 1, variant = 0) {
 
     // Yellow-and-black edge marking so the entrance reads clearly
     const edge = new THREE.Mesh(
-        new THREE.BoxGeometry(0.3, 0.24, forecourtZ),
-        new THREE.MeshLambertMaterial({ color: 0xF5C400, flatShading: true })
+        roundedBox(0.3, 0.24, forecourtZ),
+        new THREE.MeshLambertMaterial({ color: 0xF5C400 })
     );
     edge.position.set(front * (forecourtX / 2 - 0.15), 0.12, 0);
     pump.add(edge);
 
     // --- Canopy over the forecourt ---
     const canopy = new THREE.Mesh(
-        new THREE.BoxGeometry(forecourtX - 1, 0.5, forecourtZ - 2),
-        new THREE.MeshLambertMaterial({ color: colors.canopy, flatShading: true })
+        roundedBox(forecourtX - 1, 0.5, forecourtZ - 2),
+        new THREE.MeshLambertMaterial({ color: colors.canopy })
     );
     canopy.position.y = canopyHeight;
     canopy.castShadow = true;
@@ -184,8 +185,8 @@ export function createPetrolPump(side = 1, variant = 0) {
 
     // Trim band under the canopy edge
     const band = new THREE.Mesh(
-        new THREE.BoxGeometry(forecourtX - 0.6, 0.45, forecourtZ - 1.6),
-        new THREE.MeshLambertMaterial({ color: colors.trim, flatShading: true })
+        roundedBox(forecourtX - 0.6, 0.45, forecourtZ - 1.6),
+        new THREE.MeshLambertMaterial({ color: colors.trim })
     );
     band.position.y = canopyHeight - 0.4;
     pump.add(band);
@@ -194,8 +195,8 @@ export function createPetrolPump(side = 1, variant = 0) {
     [-1, 1].forEach(endX => {
         [-1, 1].forEach(endZ => {
             const column = new THREE.Mesh(
-                new THREE.BoxGeometry(0.4, canopyHeight, 0.4),
-                new THREE.MeshLambertMaterial({ color: 0xDEDEDE, flatShading: true })
+                roundedBox(0.4, canopyHeight, 0.4),
+                new THREE.MeshLambertMaterial({ color: 0xDEDEDE })
             );
             column.position.set(
                 endX * (forecourtX / 2 - 1.4),
@@ -209,8 +210,8 @@ export function createPetrolPump(side = 1, variant = 0) {
 
     // --- Pump island with two dispensers ---
     const island = new THREE.Mesh(
-        new THREE.BoxGeometry(1.6, 0.3, 7),
-        new THREE.MeshLambertMaterial({ color: 0xB0B0B0, flatShading: true })
+        roundedBox(1.6, 0.3, 7),
+        new THREE.MeshLambertMaterial({ color: 0xB0B0B0 })
     );
     island.position.set(front * 2.2, 0.25, 0);
     island.receiveShadow = true;
@@ -246,8 +247,8 @@ export function createPetrolPump(side = 1, variant = 0) {
 
     // Sign frame, so it is solid from the side
     const signFrame = new THREE.Mesh(
-        new THREE.BoxGeometry(8.2, 2.2, 0.18),
-        new THREE.MeshLambertMaterial({ color: colors.trim, flatShading: true })
+        roundedBox(8.2, 2.2, 0.18),
+        new THREE.MeshLambertMaterial({ color: colors.trim })
     );
     signFrame.position.set(0, canopyHeight + 1.2, 0);
     pump.add(signFrame);
@@ -255,8 +256,8 @@ export function createPetrolPump(side = 1, variant = 0) {
     // --- Cashier kiosk at the back ---
     const kioskHeight = 2.9;
     const kiosk = new THREE.Mesh(
-        new THREE.BoxGeometry(3, kioskHeight, 4),
-        new THREE.MeshLambertMaterial({ color: 0xF0F0F0, flatShading: true })
+        roundedBox(3, kioskHeight, 4),
+        new THREE.MeshLambertMaterial({ color: 0xF0F0F0 })
     );
     kiosk.position.set(-front * (forecourtX / 2 - 2.2), kioskHeight / 2, 0);
     kiosk.castShadow = true;
@@ -264,8 +265,8 @@ export function createPetrolPump(side = 1, variant = 0) {
     pump.add(kiosk);
 
     const kioskRoof = new THREE.Mesh(
-        new THREE.BoxGeometry(3.5, 0.3, 4.5),
-        new THREE.MeshLambertMaterial({ color: colors.canopy, flatShading: true })
+        roundedBox(3.5, 0.3, 4.5),
+        new THREE.MeshLambertMaterial({ color: colors.canopy })
     );
     kioskRoof.position.set(-front * (forecourtX / 2 - 2.2), kioskHeight + 0.15, 0);
     pump.add(kioskRoof);
@@ -273,8 +274,8 @@ export function createPetrolPump(side = 1, variant = 0) {
     // --- Air / water stand beside the island ---
     const airStand = new THREE.Group();
     const airBody = new THREE.Mesh(
-        new THREE.BoxGeometry(0.5, 1.1, 0.5),
-        new THREE.MeshLambertMaterial({ color: 0x2E7D32, flatShading: true })
+        roundedBox(0.5, 1.1, 0.5),
+        new THREE.MeshLambertMaterial({ color: 0x2E7D32 })
     );
     airBody.position.y = 0.55;
     airBody.castShadow = true;

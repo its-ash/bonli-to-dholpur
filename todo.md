@@ -76,3 +76,28 @@ Request: Create a Three.js bus driving game with the following specifications:
 
 - [x] `scripts/vehicles.js`: a car stuck behind a slower vehicle (`speedAhead < targetSpeed - 2` within `TRAFFIC_LANE_CHANGE.TRIGGER_GAP`) switches to the other lane of its direction when `isLaneFree` confirms that lane is clear of cars and the bus, then has a random cooldown. Sideways motion is rate-limited (`LATERAL_SPEED`) instead of snapping to the lane centre.
 - [x] `scripts/smoke.mjs`: checks that a stuck car moves into the free lane; the bus simulation checks take traffic off the road so they are not disturbed by it.
+
+## Landscape: mountains, ponds, lakes, forests
+
+- [x] `scripts/landscape.js` (`createLandscape`, tuned in `LANDSCAPE` in `constants.js`), recycled along the road with `recycleBehind` and kept clear of the road, dhabas and pumps:
+  - Forests: oval patches of instanced pines (two cone tiers), broadleaf trees and bushes with varied greens, sizes and trunks.
+  - Ponds: water from overlapping ellipses on a shore ring, with reeds, rocks and lily pads.
+  - Lakes: larger irregular water with rocky shores, a wooden jetty and a moored rowing boat that bobs.
+  - Mountains: ranges of noise-displaced cones, vertex-coloured by height (forested foothills, scrub, rock, snow on the tallest peaks).
+  - Water uses a tileable ripple texture that drifts slowly; overlapping ellipses use separate polygon offsets so they never flicker.
+  - Trees and bushes inside water (plus a shore margin) are hidden whenever a forest or water body is placed.
+- [x] `FOG_FAR` raised from 500 to 600 so the distant mountains show through the haze.
+- [x] `scripts/smoke.mjs`: stub gains `ConeGeometry`, `CircleGeometry`, `IcosahedronGeometry`, `InstancedMesh`; checks that all four features exist, water stays clear of the road, mountains stay far away, no tree stands in water (also after recycling), and the landscape follows the bus.
+
+## Fixes: bus pinned after a crash, HUD and camera glitches
+
+- [x] Crash response (`collision.js`, `physics.js`): speed loss and the safety penalty now happen once per crash instead of on every frame of contact (a contact only ends once the vehicles are 0.25 apart, so the 0.01 separation gap no longer reads as a new crash). A car hit from behind is shoved forward at 90% of the bus's speed and drives on; side and head-on hits still knock the car back. The traffic code's separation pass no longer changes car speeds. Before, pressing into a car cut the bus to 35% speed every frame, pinning it.
+- [x] HUD (`hud.js`): fixed 260px width, no wrapping, padded numbers, and the fuel/passenger read-out split into two fixed lines, so the panel no longer jumps size as the numbers change. Text, colours and the AUTO button are only written when they change.
+- [x] Camera (`camera.js`): follows the bus's heading only, so the body lean no longer tilts or sways the view.
+- [x] `scripts/smoke.mjs`: regression check that a bus driving into a car is not pinned (counts each crash once, keeps moving, the car is shoved on); flaky checks fixed (bus stop beside a pump, stopped car respawned after the pass). The autopilot overtake check still fails about 1 run in 20-25 (overshoot onto the shoulder).
+
+## Rounded corners
+
+- [x] `scripts/rounded.js`: `roundedBox(w, h, d, radius?)` wraps three.js's `RoundedBoxGeometry` add-on (loaded via the new `three/addons/` import-map entry) and keeps the real size in `parameters`. Every box on the bus, the cars, dhabas, petrol pumps, the bus stand and the bus-stop shelters now uses it (radius: a quarter of the shortest side, at most 0.25), and those materials dropped `flatShading` so the curved edges shade smoothly.
+- [x] UI cards: the HUD, music panel and touch pad have 12px rounded corners with a soft shadow; buttons 6-8px; the mobile bottom bar rounds its top corners.
+- [x] `scripts/smoke.mjs`: the harness also redirects `three/addons/...` to the stub; checks that no sharp boxes remain on vehicles or buildings and that rounded boxes report their real size.

@@ -11,6 +11,7 @@ import { initInput, getKeys, setKey, setSteer, releaseAllKeys, DRIVING_KEY_CODES
 import { createCameraController, zoomForViewport } from './camera.js';
 import { createSkyDome, createLighting, createGround, followGroundAndSky } from './environment.js';
 import { createEndlessWorld } from './endless.js';
+import { createLandscape } from './landscape.js';
 import { createBusStand } from './busstand.js';
 import { createBus, makeAICars, updateAICars } from './vehicles.js';
 import { makePedestrians, updatePedestrians } from './pedestrians.js';
@@ -90,6 +91,9 @@ scene.add(bus);
 
 // --- The endless road, with dhabas, petrol pumps and boards ---
 const world = createEndlessWorld({ bus, scene });
+
+// --- Forests, ponds, lakes and mountains beyond the roadside ---
+const landscape = createLandscape({ bus, scene });
 
 // --- Bus simulation: fuel, bus stops with passengers and fares, safety, horn ---
 const busSim = createBusSim({ bus, scene, pumps: world.pumps });
@@ -210,6 +214,7 @@ function animate(time) {
 
     // Keep the endless world wrapped around the bus: road and scenery
     world.update(dt);
+    landscape.update(dt);
 
     // Advance the trip meter (distance driven, next town)
     journey.update(dt);
@@ -277,7 +282,8 @@ globalThis.__journey = journey;
 globalThis.__autopilot = autopilot;
 globalThis.__toggleAutopilot = toggleAutopilot;
 globalThis.__busSim = busSim;
+globalThis.__landscape = landscape;
 
 console.log('Three.js Revision:', THREE.REVISION);
 console.log('Bus Driving Game initialized successfully!');
-console.log('Systems: Scene, Lighting, Endless 4-Lane Road, Bus Stand, Dhabas, Petrol Pumps, Distance Boards, Trees, Bus, AI Cars, Pedestrians, Camera, Physics, Journey, Autopilot, Bus Simulation, HUD, Touch');
+console.log('Systems: Scene, Lighting, Endless 4-Lane Road, Bus Stand, Dhabas, Petrol Pumps, Distance Boards, Trees, Forests, Ponds, Lakes, Mountains, Bus, AI Cars, Pedestrians, Camera, Physics, Journey, Autopilot, Bus Simulation, HUD, Touch');

@@ -115,18 +115,21 @@ export function updateBusPhysics(bus, aiCars, pedestrians, keys, dt) {
     }
 
     // Collision with AI cars (oriented box test: a 10-unit bus is not a circle)
+    // Only the first frame of a crash costs momentum and counts as a hit;
+    // staying in contact (pushing a car along, scraping past) must not pin the bus
     aiCars.forEach(car => {
-        if (resolveVehicleImpact(bus, car)) {
-            const impactSpeed = Math.abs(data.speed);
-            if (impactSpeed > 1) data.impacts += 1;
-            // Momentum is lost in the crash (heavier bus keeps a share of it)
-            data.speed *= PHYSICS.BUS_RESTITUTION;
+        const impact = resolveVehicleImpact(bus, car);
+        if (!impact || !impact.firstContact) return;
 
-            // A hard hit knocks the bus sideways a little
-            if (impactSpeed > 5) {
-                const dx = car.position.x - bus.position.x;
-                bus.position.x -= Math.sign(dx) * 0.15;
-            }
+        const impactSpeed = Math.abs(data.speed);
+        if (impactSpeed > 1) data.impacts += 1;
+        // Momentum is lost in the crash (heavier bus keeps a share of it)
+        data.speed *= PHYSICS.BUS_RESTITUTION;
+
+        // A hard hit knocks the bus sideways a little
+        if (impactSpeed > 5) {
+            const dx = car.position.x - bus.position.x;
+            bus.position.x -= Math.sign(dx) * 0.15;
         }
     });
 

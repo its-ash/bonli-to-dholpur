@@ -8,6 +8,7 @@
 
 import * as THREE from 'three';
 import { ROAD_HALF_WIDTH, SHOULDER_WIDTH, BUS_LENGTH, PLAYER_START_Z } from './constants.js';
+import { roundedBox } from './rounded.js';
 
 const SIGN_FONT = '"Noto Sans Devanagari", "Nirmala UI", sans-serif';
 
@@ -76,32 +77,32 @@ function createWaitingPassenger(variant) {
     const person = new THREE.Group();
 
     const body = new THREE.Mesh(
-        new THREE.BoxGeometry(0.34, 0.6, 0.22),
-        new THREE.MeshLambertMaterial({ color: shirts[variant % shirts.length], flatShading: true })
+        roundedBox(0.34, 0.6, 0.22),
+        new THREE.MeshLambertMaterial({ color: shirts[variant % shirts.length] })
     );
     body.position.y = 0.62;
     body.castShadow = true;
     person.add(body);
 
     const head = new THREE.Mesh(
-        new THREE.BoxGeometry(0.22, 0.22, 0.22),
-        new THREE.MeshLambertMaterial({ color: skins[variant % skins.length], flatShading: true })
+        roundedBox(0.22, 0.22, 0.22),
+        new THREE.MeshLambertMaterial({ color: skins[variant % skins.length] })
     );
     head.position.y = 1.03;
     head.castShadow = true;
     person.add(head);
 
     const legs = new THREE.Mesh(
-        new THREE.BoxGeometry(0.3, 0.32, 0.2),
-        new THREE.MeshLambertMaterial({ color: 0x2C3E50, flatShading: true })
+        roundedBox(0.3, 0.32, 0.2),
+        new THREE.MeshLambertMaterial({ color: 0x2C3E50 })
     );
     legs.position.y = 0.16;
     person.add(legs);
 
     // A bag at their feet
     const bag = new THREE.Mesh(
-        new THREE.BoxGeometry(0.3, 0.26, 0.2),
-        new THREE.MeshLambertMaterial({ color: 0x8B5A2B, flatShading: true })
+        roundedBox(0.3, 0.26, 0.2),
+        new THREE.MeshLambertMaterial({ color: 0x8B5A2B })
     );
     bag.position.set(0.32, 0.13, 0.05);
     bag.castShadow = true;
@@ -130,8 +131,8 @@ export function createBusStand({ z = PLAYER_START_Z + 10 } = {}) {
     const platformLength = BUS_LENGTH + 22;
 
     const platform = new THREE.Mesh(
-        new THREE.BoxGeometry(7, 0.25, platformLength),
-        new THREE.MeshLambertMaterial({ color: 0xB9B9B9, flatShading: true })
+        roundedBox(7, 0.25, platformLength),
+        new THREE.MeshLambertMaterial({ color: 0xB9B9B9 })
     );
     platform.position.set(platformX - 1.5, 0.12, 0);
     platform.receiveShadow = true;
@@ -139,8 +140,8 @@ export function createBusStand({ z = PLAYER_START_Z + 10 } = {}) {
 
     // Yellow hazard lip along the platform edge (the classic Indian bus bay)
     const lip = new THREE.Mesh(
-        new THREE.BoxGeometry(0.4, 0.3, platformLength),
-        new THREE.MeshLambertMaterial({ color: 0xF5C400, flatShading: true })
+        roundedBox(0.4, 0.3, platformLength),
+        new THREE.MeshLambertMaterial({ color: 0xF5C400 })
     );
     lip.position.set(platformX + 1.9, 0.16, 0);
     stand.add(lip);
@@ -148,8 +149,8 @@ export function createBusStand({ z = PLAYER_START_Z + 10 } = {}) {
     // --- Canopy over the bay ---
     const canopyHeight = 3.6;
     const canopy = new THREE.Mesh(
-        new THREE.BoxGeometry(9, 0.3, platformLength + 4),
-        new THREE.MeshLambertMaterial({ color: 0x4A6FA5, flatShading: true })
+        roundedBox(9, 0.3, platformLength + 4),
+        new THREE.MeshLambertMaterial({ color: 0x4A6FA5 })
     );
     canopy.position.set(platformX - 1.5, canopyHeight, 0);
     canopy.castShadow = true;
@@ -158,8 +159,8 @@ export function createBusStand({ z = PLAYER_START_Z + 10 } = {}) {
     // Canopy support pillars
     [-platformLength / 2 + 1, 0, platformLength / 2 - 1].forEach(offsetZ => {
         const pillar = new THREE.Mesh(
-            new THREE.BoxGeometry(0.3, canopyHeight, 0.3),
-            new THREE.MeshLambertMaterial({ color: 0xCFCFCF, flatShading: true })
+            roundedBox(0.3, canopyHeight, 0.3),
+            new THREE.MeshLambertMaterial({ color: 0xCFCFCF })
         );
         pillar.position.set(platformX + 1.6, canopyHeight / 2, offsetZ);
         pillar.castShadow = true;
@@ -169,8 +170,8 @@ export function createBusStand({ z = PLAYER_START_Z + 10 } = {}) {
     // --- Ticket office at the back of the platform ---
     const officeHeight = 3.2;
     const office = new THREE.Mesh(
-        new THREE.BoxGeometry(3.6, officeHeight, 8),
-        new THREE.MeshLambertMaterial({ color: 0xE8D9B0, flatShading: true })
+        roundedBox(3.6, officeHeight, 8),
+        new THREE.MeshLambertMaterial({ color: 0xE8D9B0 })
     );
     office.position.set(platformX - 5.6, officeHeight / 2, 0);
     office.castShadow = true;
@@ -178,8 +179,8 @@ export function createBusStand({ z = PLAYER_START_Z + 10 } = {}) {
     stand.add(office);
 
     const officeRoof = new THREE.Mesh(
-        new THREE.BoxGeometry(4.2, 0.3, 8.6),
-        new THREE.MeshLambertMaterial({ color: 0x8B2500, flatShading: true })
+        roundedBox(4.2, 0.3, 8.6),
+        new THREE.MeshLambertMaterial({ color: 0x8B2500 })
     );
     officeRoof.position.set(platformX - 5.6, officeHeight + 0.15, 0);
     stand.add(officeRoof);
@@ -230,8 +231,8 @@ export function createBusStand({ z = PLAYER_START_Z + 10 } = {}) {
 
     // --- A bench for the people who got here early ---
     const bench = new THREE.Mesh(
-        new THREE.BoxGeometry(0.6, 0.45, 3.2),
-        new THREE.MeshLambertMaterial({ color: 0x8B5A2B, flatShading: true })
+        roundedBox(0.6, 0.45, 3.2),
+        new THREE.MeshLambertMaterial({ color: 0x8B5A2B })
     );
     bench.position.set(platformX - 2.2, 0.47, -platformLength / 2 + 5);
     bench.castShadow = true;

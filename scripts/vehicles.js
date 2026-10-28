@@ -13,6 +13,7 @@ import {
 } from './constants.js';
 import { createBusBodyTexture, createCarTexture, createHeartTextTexture } from './utils.js';
 import { separateVehicles, resolveVehicleImpact } from './collision.js';
+import { roundedBox } from './rounded.js';
 
 // How far ahead of / behind the bus AI traffic is kept alive. Anything further
 // than this is recycled back into view (the road itself never ends).
@@ -47,7 +48,7 @@ export function createBus() {
     // --- Bus Body ---
     // Lambert + flat shading keeps the surfaces flat and saturated (pixel-art),
     // instead of the smooth PBR gradients of MeshStandardMaterial.
-    const bodyGeometry = new THREE.BoxGeometry(BUS_WIDTH, BUS_HEIGHT - 0.5, BUS_LENGTH);
+    const bodyGeometry = roundedBox(BUS_WIDTH, BUS_HEIGHT - 0.5, BUS_LENGTH);
     const bodyMaterial = new THREE.MeshLambertMaterial({
         map: bodyTexture
     });
@@ -61,7 +62,7 @@ export function createBus() {
     const cabinWidth = BUS_WIDTH * 0.9;
     const cabinHeight = 1.6;
     const cabinDepth = 3.5;
-    const cabinGeometry = new THREE.BoxGeometry(cabinWidth, cabinHeight, cabinDepth);
+    const cabinGeometry = roundedBox(cabinWidth, cabinHeight, cabinDepth);
     const cabinMaterial = new THREE.MeshLambertMaterial({
         color: COLORS.BUS_CABIN,
         transparent: true,
@@ -73,10 +74,9 @@ export function createBus() {
     busGroup.add(cabin);
 
     // --- Roof ---
-    const roofGeometry = new THREE.BoxGeometry(BUS_WIDTH + 0.1, 0.2, BUS_LENGTH + 0.2);
+    const roofGeometry = roundedBox(BUS_WIDTH + 0.1, 0.2, BUS_LENGTH + 0.2);
     const roofMaterial = new THREE.MeshLambertMaterial({
-        color: COLORS.BUS_ROOF,
-        flatShading: true
+        color: COLORS.BUS_ROOF
     });
     const roof = new THREE.Mesh(roofGeometry, roofMaterial);
     roof.position.y = BUS_HEIGHT + 0.1;
@@ -89,8 +89,7 @@ export function createBus() {
     // (before, the tyres were rotated around X and lay flat like barrels).
     const wheelGeometry = new THREE.CylinderGeometry(WHEEL_RADIUS, WHEEL_RADIUS, WHEEL_WIDTH, 8);
     const wheelMaterial = new THREE.MeshLambertMaterial({
-        color: COLORS.BUS_WHEEL,
-        flatShading: true
+        color: COLORS.BUS_WHEEL
     });
     const hubMaterial = new THREE.MeshLambertMaterial({
         color: COLORS.WHEEL_HUB
@@ -117,7 +116,7 @@ export function createBus() {
 
         // Blocky hub cap so the spin is readable in pixel-art style
         const hub = new THREE.Mesh(
-            new THREE.BoxGeometry(WHEEL_WIDTH * 1.1, WHEEL_RADIUS * 0.7, WHEEL_RADIUS * 0.7),
+            roundedBox(WHEEL_WIDTH * 1.1, WHEEL_RADIUS * 0.7, WHEEL_RADIUS * 0.7),
             hubMaterial
         );
         hub.castShadow = true;
@@ -131,7 +130,7 @@ export function createBus() {
     busGroup.userData.wheelRadius = WHEEL_RADIUS;
 
     // --- Front Bumper (models face -Z, which is the forward direction) ---
-    const bumperGeometry = new THREE.BoxGeometry(BUS_WIDTH + 0.2, 0.4, 0.3);
+    const bumperGeometry = roundedBox(BUS_WIDTH + 0.2, 0.4, 0.3);
     const bumperMaterial = new THREE.MeshLambertMaterial({
         color: COLORS.BUS_BUMPER
     });
@@ -141,7 +140,7 @@ export function createBus() {
     busGroup.add(bumper);
 
     // --- Headlights (emissive) ---
-    const headlightGeometry = new THREE.BoxGeometry(0.4, 0.25, 0.05);
+    const headlightGeometry = roundedBox(0.4, 0.25, 0.05);
     const headlightMaterial = new THREE.MeshBasicMaterial({
         color: COLORS.HEADLIGHT
     });
@@ -158,7 +157,7 @@ export function createBus() {
     });
 
     // --- Rear Lights ---
-    const rearLightGeometry = new THREE.BoxGeometry(0.5, 0.3, 0.05);
+    const rearLightGeometry = roundedBox(0.5, 0.3, 0.05);
     const rearLightMaterial = new THREE.MeshBasicMaterial({
         color: COLORS.TAILLIGHT
     });
@@ -189,7 +188,7 @@ export function createBus() {
     busGroup.add(heartDecal);
 
     // --- Pixel Art Extras: Side Mirrors ---
-    const mirrorGeometry = new THREE.BoxGeometry(0.1, 0.3, 0.25);
+    const mirrorGeometry = roundedBox(0.1, 0.3, 0.25);
     const mirrorMaterial = new THREE.MeshLambertMaterial({
         color: COLORS.BUS_BASE
     });
@@ -241,7 +240,7 @@ export function createCar(color, variant = 0) {
 
     // --- Car Body ---
     const bodyTexture = createCarTexture(color);
-    const bodyGeometry = new THREE.BoxGeometry(bodyWidth, bodyHeight, bodyLength);
+    const bodyGeometry = roundedBox(bodyWidth, bodyHeight, bodyLength);
     const bodyMaterial = new THREE.MeshLambertMaterial({
         map: bodyTexture
     });
@@ -252,10 +251,9 @@ export function createCar(color, variant = 0) {
     carGroup.add(body);
 
     // --- Roof ---
-    const roofGeometry = new THREE.BoxGeometry(bodyWidth * 0.85, bodyHeight * 0.35, bodyLength * 0.7);
+    const roofGeometry = roundedBox(bodyWidth * 0.85, bodyHeight * 0.35, bodyLength * 0.7);
     const roofMaterial = new THREE.MeshLambertMaterial({
-        color: COLORS.CAR_ROOF,
-        flatShading: true
+        color: COLORS.CAR_ROOF
     });
     const roof = new THREE.Mesh(roofGeometry, roofMaterial);
     roof.position.y = bodyHeight + CAR_WHEEL_RADIUS + roofGeometry.parameters.height / 2;
@@ -266,8 +264,7 @@ export function createCar(color, variant = 0) {
     // Same fix as the bus: rotate around Z so the axle points along X.
     const wheelGeometry = new THREE.CylinderGeometry(CAR_WHEEL_RADIUS, CAR_WHEEL_RADIUS, CAR_WHEEL_WIDTH, 8);
     const wheelMaterial = new THREE.MeshLambertMaterial({
-        color: COLORS.CAR_WHEEL,
-        flatShading: true
+        color: COLORS.CAR_WHEEL
     });
 
     const wheelOffsetX = bodyWidth / 2 + CAR_WHEEL_WIDTH / 2;
@@ -296,7 +293,7 @@ export function createCar(color, variant = 0) {
     });
 
     // --- Lights ---
-    const lightGeometry = new THREE.BoxGeometry(0.3, 0.15, 0.05);
+    const lightGeometry = roundedBox(0.3, 0.15, 0.05);
     const headlightMaterial = new THREE.MeshBasicMaterial({
         color: COLORS.HEADLIGHT
     });
@@ -605,7 +602,7 @@ export function updateAICars(aiCars, dt, bus) {
         aiCars.forEach(car => {
             if (Math.abs(car.position.z - bus.position.z) > 14) return;
             if (Math.abs(car.position.x - bus.position.x) > 5) return;
-            resolveVehicleImpact(bus, car);
+            resolveVehicleImpact(bus, car, { react: false });
         });
     }
 }

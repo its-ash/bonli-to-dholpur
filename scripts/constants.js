@@ -129,7 +129,7 @@ export const COLORS = {
 };
 export const FOG_COLOR = 0x87CEEB;
 export const FOG_NEAR = 100;
-export const FOG_FAR = 500;
+export const FOG_FAR = 600;          // far enough to see the distant mountains through the haze
 
 export const SHADOW_CAMERA = { left: -100, right: 100, top: 100, bottom: -100, near: 1, far: 500 };
 export const SHADOW_MAP_SIZE = 2048;
@@ -171,6 +171,34 @@ export const TRAFFIC_LANE_CHANGE = {
     LATERAL_SPEED: 2.2,    // u/s a car may drift sideways
     COOLDOWN_MIN: 5,       // seconds before a car may change lanes again
     COOLDOWN_MAX: 10
+};
+
+// --- Landscape: forests, ponds, lakes and mountains (scripts/landscape.js) ---
+// Every band keeps clear of the road, the dhabas and the petrol pumps
+// (which reach |x| = 22). Items alternate sides and are recycled along the road.
+export const LANDSCAPE = {
+    FOREST: {
+        COUNT: 10, X_MIN: 60, X_MAX: 130,       // patch centre, |x|
+        HALF_WIDTH: 25, HALF_LENGTH: 35,        // oval patch size
+        PINES: 28, BROADLEAF: 18, BUSHES: 14,
+        GAP_MIN: 60, GAP_MAX: 110, BEHIND: 120
+    },
+    POND: {
+        COUNT: 4, X_MIN: 40, X_MAX: 52,
+        RADIUS_MIN: 5, RADIUS_MAX: 9,
+        GAP_MIN: 160, GAP_MAX: 280, BEHIND: 80
+    },
+    LAKE: {
+        COUNT: 3, X_MIN: 110, X_MAX: 145,
+        RADIUS_MIN: 22, RADIUS_MAX: 36,
+        GAP_MIN: 380, GAP_MAX: 600, BEHIND: 150
+    },
+    MOUNTAIN: {
+        COUNT: 12, X_MIN: 260, X_MAX: 340, PEAKS: 4,
+        GAP_MIN: 70, GAP_MAX: 130, BEHIND: 300
+    },
+    SHORE_WIDTH: 2.5,       // sand/mud ring around the water
+    SHORE_MARGIN: 3         // trees keep this far from any water
 };
 
 // Tree placement

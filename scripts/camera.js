@@ -38,9 +38,21 @@ export function createCameraController(camera, target) {
         offset.copy(baseOffset).multiplyScalar(zoom);
     }
 
+    // Rotates a local offset by the target's heading (yaw) only, so the bus's
+    // body lean and roll never tilt or shake the camera
+    function aroundTarget(x, y, z) {
+        const cos = Math.cos(target.rotation.y);
+        const sin = Math.sin(target.rotation.y);
+        return new THREE.Vector3(
+            target.position.x + x * cos + z * sin,
+            target.position.y + y,
+            target.position.z - x * sin + z * cos
+        );
+    }
+
     function updateCamera(dt) {
         // Calculate target position: offset rotated by target heading
-        const targetPos = offset.clone().applyQuaternion(target.quaternion).add(target.position);
+        const targetPos = aroundTarget(offset.x, offset.y, offset.z);
 
         // Smooth lerp using exponential damping: 1 - exp(-k*dt)
         const dampingFactor = 1 - Math.exp(-CAMERA_DAMPING * dt);
@@ -48,8 +60,7 @@ export function createCameraController(camera, target) {
         camera.position.lerp(targetPos, dampingFactor);
 
         // Look at the target (slightly ahead for better view)
-        const lookAtPos = new THREE.Vector3(0, 1.5, -3).applyQuaternion(target.quaternion).add(target.position);
-        camera.lookAt(lookAtPos);
+        camera.lookAt(aroundTarget(0, 1.5, -3));
     }
 
     updateCamera.setZoom = setZoom;

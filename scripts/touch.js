@@ -45,7 +45,8 @@ function createPadButton(parent, label, action, hint, onManualInput) {
         background: #262633;
         color: #FFD700;
         border: 4px solid #FFD700;
-        box-shadow: 4px 4px 0 #000000;
+        border-radius: 12px;
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
         font-family: 'Courier New', ui-monospace, monospace;
         font-size: 22px;
         font-weight: bold;

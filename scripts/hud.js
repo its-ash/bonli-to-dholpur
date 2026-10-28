@@ -19,6 +19,27 @@ function makeElement(tag, { id = '', css = '', text = '' } = {}) {
     return element;
 }
 
+/**
+ * Writes text only when it changed, so the HUD does not re-layout every frame.
+ * @param {HTMLElement} element
+ * @param {string} text
+ */
+function setText(element, text) {
+    if (element.textContent !== text) element.textContent = text;
+}
+
+/**
+ * Sets a text colour only when it changed (browsers normalise colour strings,
+ * so the last value is remembered on the element).
+ * @param {HTMLElement} element
+ * @param {string} color
+ */
+function setColor(element, color) {
+    if (element.dataset && element.dataset.color === color) return;
+    if (element.dataset) element.dataset.color = color;
+    element.style.color = color;
+}
+
 const CONTROL_LINES_DESKTOP = [
     'W / UP: ACCELERATE',
     'S / DOWN: BRAKE',
@@ -56,8 +77,8 @@ function fillControlHints(controls, touch) {
 export function createHUD({ onToggleAuto } = {}) {
     const hud = document.createElement('div');
     hud.id = 'hud';
-    // Square corners, hard 4px border and a blocky monospace font keep the
-    // overlay consistent with the low-resolution 3D scene.
+    // Rounded corners and a soft shadow match the rounded vehicles and
+    // buildings; the bold border and monospace font keep it readable.
     hud.style.cssText = `
         position: fixed;
         top: 16px;
@@ -73,22 +94,23 @@ export function createHUD({ onToggleAuto } = {}) {
         background: #16161F;
         padding: 10px 12px;
         border: 4px solid #FFD700;
-        box-shadow: 4px 4px 0 #000000;
-        min-width: 190px;
-        max-width: 260px;
+        border-radius: 12px;
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+        width: 260px;
+        white-space: nowrap;
         line-height: 1.5;
     `;
 
     const speed = makeElement('div', {
         id: 'speed',
-        css: 'font-size: 24px; color: #FFD700; letter-spacing: 2px;',
+        css: 'font-size: 24px; color: #FFD700; letter-spacing: 2px; white-space: pre;',
         text: 'SPEED: 0 KM/H'
     });
     hud.appendChild(speed);
 
     const status = makeElement('div', {
         id: 'status',
-        css: 'font-size: 11px; color: #2ECC71; margin-top: 2px;',
+        css: 'font-size: 11px; color: #2ECC71; margin-top: 2px; overflow: hidden; text-overflow: ellipsis;',
         text: 'DRIVING'
     });
     hud.appendChild(status);
@@ -111,7 +133,7 @@ export function createHUD({ onToggleAuto } = {}) {
     // --- Bus sim read-out: fuel, passengers, fares and safety on one line ---
     const sim = makeElement('div', {
         id: 'sim',
-        css: 'font-size: 11px; color: #9AA0A6; margin-top: 2px;'
+        css: 'font-size: 11px; color: #9AA0A6; margin-top: 2px; white-space: pre;'
     });
     hud.appendChild(sim);
 
@@ -125,6 +147,7 @@ export function createHUD({ onToggleAuto } = {}) {
             background: #262633;
             color: #4A90D9;
             border: 2px solid #4A90D9;
+            border-radius: 8px;
             font-family: inherit;
             font-size: 12px;
             font-weight: bold;
@@ -208,10 +231,12 @@ export function setHudMobileMode(hud, mobile) {
         hud.style.bottom = '';
         hud.style.left = '';
         hud.style.right = '16px';
-        hud.style.minWidth = '190px';
-        hud.style.maxWidth = '260px';
+        hud.style.width = '260px';
+        hud.style.minWidth = '';
+        hud.style.maxWidth = '';
         hud.style.borderWidth = '4px';
-        hud.style.boxShadow = '4px 4px 0 #000000';
+        hud.style.boxShadow = '0 6px 18px rgba(0, 0, 0, 0.45)';
+        hud.style.borderRadius = '12px';
         hud.style.padding = '10px 12px';
         if (speedEl) speedEl.style.fontSize = '24px';
         if (controls) controls.style.display = '';
@@ -233,10 +258,12 @@ export function setHudMobileMode(hud, mobile) {
     hud.style.bottom = '0';
     hud.style.left = '0';
     hud.style.right = '0';
+    hud.style.width = 'auto';
     hud.style.minWidth = '0';
     hud.style.maxWidth = 'none';
     hud.style.borderWidth = '4px 0 0 0';
     hud.style.boxShadow = 'none';
+    hud.style.borderRadius = '16px 16px 0 0';
     hud.style.padding = '8px 12px calc(8px + env(safe-area-inset-bottom, 0px)) 12px';
 
     // Keep the read-out compact so the button stays in thumb reach
@@ -280,6 +307,9 @@ export function setAutoButtonState(hud, state) {
     if (!button) return;
 
     const on = Boolean(state && state.active);
+    // Restyle only when the state flips, not on every frame
+    if (button.dataset && button.dataset.on === String(on)) return;
+    if (button.dataset) button.dataset.on = String(on);
     button.textContent = on ? 'AUTO ON - TAP TO STOP' : 'AUTO DRIVE';
     button.style.background = on ? '#4A90D9' : '#262633';
     button.style.color = on ? '#16161F' : '#4A90D9';
@@ -304,37 +334,34 @@ export function updateHUD(hud, speed, extra = {}) {
     const speedKmh = Math.round(Math.abs(speed) * 3.6); // Convert to km/h
     const speedEl = hud.querySelector('#speed');
     if (speedEl) {
-        speedEl.textContent = `SPEED: ${speedKmh} KM/H`;
+        // Padded to three digits so the line never changes width
+        setText(speedEl, `SPEED: ${String(speedKmh).padStart(3)} KM/H`);
 
         // Color based on speed (palette-limited, no gradients)
-        if (speedKmh > 60) {
-            speedEl.style.color = '#E74C3C';
-        } else if (speedKmh > 30) {
-            speedEl.style.color = '#F39C12';
-        } else {
-            speedEl.style.color = '#FFD700';
-        }
+        setColor(speedEl, speedKmh > 60 ? '#E74C3C' : speedKmh > 30 ? '#F39C12' : '#FFD700');
     }
 
     // --- Distance driven ---
     const distanceEl = hud.querySelector('#distance');
     if (distanceEl && typeof info.distanceKm === 'number') {
-        distanceEl.textContent = `DISTANCE: ${info.distanceKm.toFixed(1)} KM`;
+        setText(distanceEl, `DISTANCE: ${info.distanceKm.toFixed(1)} KM`);
     }
 
     // --- Next town from the roadside distance boards ---
     const nextTownEl = hud.querySelector('#next-town');
     if (nextTownEl && info.nextTown) {
-        nextTownEl.textContent =
-            `NEXT: ${info.nextTown.name} ${Math.max(0, Math.round(info.nextTown.km))} KM`;
+        setText(nextTownEl, `NEXT: ${info.nextTown.name} ${Math.max(0, Math.round(info.nextTown.km))} KM`);
     }
 
     // --- Fuel, passengers, fares and safety ---
     const simEl = hud.querySelector('#sim');
     if (simEl && info.sim) {
+        // Two fixed-width lines: padded numbers keep the panel from resizing
         const sim = info.sim;
-        simEl.textContent =
-            `FUEL ${sim.fuelPercent}% | PAX ${sim.passengers}/${sim.capacity} | ₹${sim.fares} | SAFE ${sim.safety}%`;
+        const pad = (value, width) => String(value).padStart(width);
+        setText(simEl,
+            `FUEL ${pad(sim.fuelPercent, 3)}%   PAX ${pad(sim.passengers, 2)}/${sim.capacity}\n` +
+            `FARE ₹${pad(sim.fares, 5)}  SAFE ${pad(sim.safety, 3)}%`);
     }
 
     const statusEl = hud.querySelector('#status');
@@ -353,8 +380,8 @@ export function updateHUD(hud, speed, extra = {}) {
             color = '#F39C12';
         }
 
-        statusEl.textContent = text;
-        statusEl.style.color = color;
+        setText(statusEl, text);
+        setColor(statusEl, color);
     }
 
     if (info.auto) {
@@ -386,7 +413,8 @@ function createMusicPanel() {
         text-transform: uppercase;
         padding: 10px 12px;
         border: 4px solid #4A90D9;
-        box-shadow: 4px 4px 0 #000000;
+        border-radius: 12px;
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
         min-width: 200px;
         max-width: 45vw;
     `;
@@ -410,6 +438,7 @@ function createMusicPanel() {
         background: #262633;
         color: #FFD700;
         border: 2px solid #FFD700;
+        border-radius: 6px;
         font-family: inherit;
         font-size: 11px;
         font-weight: bold;

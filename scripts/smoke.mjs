@@ -13,9 +13,9 @@ import { fileURLToPath, pathToFileURL } from 'url';
 
 const SCRIPTS_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'scripts');
 const FILES = [
-    'constants.js', 'utils.js', 'environment.js', 'shops.js', 'signs.js',
+    'constants.js', 'utils.js', 'rounded.js', 'environment.js', 'shops.js', 'signs.js',
     'petrolpump.js', 'busstand.js',
-    'endless.js', 'vehicles.js',
+    'endless.js', 'landscape.js', 'vehicles.js',
     'collision.js', 'input.js', 'camera.js', 'physics.js', 'journey.js',
     'autopilot.js', 'bussim.js', 'touch.js', 'pedestrians.js', 'hud.js', 'music.js', 'main.js'
 ];
@@ -64,6 +64,8 @@ class Object3D {
         this.receiveShadow = false;
         this.renderOrder = 0;
         this.visible = true;
+        this.frustumCulled = true;
+        this.matrix = {};
         const owner = this;
         this.quaternion = {};
         Object.defineProperty(this.quaternion, 'angle', { get: () => owner.rotation.y });
@@ -71,6 +73,7 @@ class Object3D {
     add(child) { this.children.push(child); return this; }
     lookAt() {}
     updateMatrixWorld() {}
+    updateMatrix() {}
 }
 
 export { Object3D };
@@ -78,6 +81,16 @@ export class Group extends Object3D {}
 export class Scene extends Object3D { constructor() { super(); this.fog = null; } }
 export class Mesh extends Object3D {
     constructor(geometry, material) { super(); this.geometry = geometry; this.material = material; }
+}
+export class InstancedMesh extends Mesh {
+    constructor(geometry, material, count) {
+        super(geometry, material);
+        this.count = count;
+        this.instanceMatrix = { needsUpdate: false };
+        this.instanceColor = null;
+    }
+    setMatrixAt() {}
+    setColorAt() {}
 }
 export class Sprite extends Object3D {
     constructor(material) { super(); this.material = material; }
@@ -87,16 +100,21 @@ export class PerspectiveCamera extends Object3D {
     updateProjectionMatrix() {}
 }
 export class BoxGeometry { constructor(w, h, d) { this.parameters = { width: w, height: h, depth: d }; } }
+export class RoundedBoxGeometry extends BoxGeometry {}
 export class CylinderGeometry { constructor(r, r2, h) { this.parameters = { radiusTop: r, radiusBottom: r2, height: h }; } }
 export class PlaneGeometry { constructor(w, h) { this.parameters = { width: w, height: h }; } }
 export class SphereGeometry { constructor(r) { this.parameters = { radius: r }; } scale() {} }
+export class ConeGeometry { constructor(r, h) { this.parameters = { radius: r, height: h }; } }
+export class CircleGeometry { constructor(r) { this.parameters = { radius: r }; } }
+export class IcosahedronGeometry { constructor(r) { this.parameters = { radius: r }; } }
 export class Fog { constructor(c, n, f) { this.color = c; this.near = n; this.far = f; } }
 export class Color {
     constructor(hex) { this.hex = hex; }
+    set(hex) { this.hex = hex; return this; }
     multiplyScalar(s) { this.hex = this.hex * s; return this; }
 }
 export class CanvasTexture {
-    constructor(canvas) { this.image = canvas; this.repeat = { set() {} }; }
+    constructor(canvas) { this.image = canvas; this.repeat = { set() {} }; this.offset = { x: 0, y: 0 }; }
     dispose() {}
 }
 class Material { constructor(opts = {}) { Object.assign(this, opts); } dispose() {} }
@@ -374,7 +392,9 @@ async function main() {
     for (const file of FILES) {
         const source = readFileSync(join(SCRIPTS_DIR, file), 'utf-8');
         // Redirect the bare "three" specifier to the local stub
-        const rewritten = source.replace(/from 'three'/g, "from './three-stub.mjs'");
+        const rewritten = source
+            .replace(/from 'three'/g, "from './three-stub.mjs'")
+            .replace(/from 'three\/addons\/[^']+'/g, "from './three-stub.mjs'");
         writeFileSync(join(tempDir, file), rewritten);
     }
 
@@ -862,12 +882,14 @@ async function main() {
     // Let the pass finish: the bus must get past the stopped car, slide back
     // into its own lane and do it without touching anything
     const impactsBeforePass = bus.userData.impacts;
+    // Recorded during the run: once far behind, traffic is respawned ahead of the bus
+    let passedStoppedCar = false;
     for (let i = 0; i < 480; i++) {
         time += 16.7;
         animate(time);
+        if (overtakeCar.position.z > bus.position.z + 5) passedStoppedCar = true;
     }
-    check('autopilot passes the stopped car',
-        overtakeCar.position.z > bus.position.z,
+    check('autopilot passes the stopped car', passedStoppedCar,
         `car z ${overtakeCar.position.z.toFixed(1)}, bus z ${bus.position.z.toFixed(1)}`);
     check('autopilot returns to the inside lane after the pass',
         Math.abs(bus.position.x - constants.LANE_LEFT) < 0.5,
@@ -1016,6 +1038,56 @@ async function main() {
         }
     };
 
+    // ------------------------------------- feature: landscape
+    const land = globalThis.__landscape;
+    const landscapeModule = await import(pathToFileURL(join(tempDir, 'landscape.js')).href);
+    const landState = land.getState();
+    check('the landscape has forests, ponds, lakes and mountains',
+        landState.forests > 0 && landState.ponds > 0 && landState.lakes > 0 && landState.mountainRanges > 0,
+        JSON.stringify(landState));
+
+    const treesInWater = () => {
+        const water = land.waterEllipses();
+        return land.forests.reduce((n, patch) => n + patch.userData.trees.filter(t =>
+            !t.hidden && landscapeModule.isInWater(patch.position.x + t.x, patch.position.z + t.z, water)).length, 0);
+    };
+    const nearestShore = Math.min(...land.waterEllipses().map(e =>
+        Math.abs(e.x) - e.rx - constants.LANDSCAPE.SHORE_WIDTH));
+    check('ponds and lakes stay clear of the road and roadside buildings',
+        nearestShore > constants.ROAD_HALF_WIDTH + 16, `nearest shore |x|=${nearestShore.toFixed(1)}`);
+    check('mountains stand far from the road',
+        land.mountains.every(range => Math.abs(range.position.x) >= constants.LANDSCAPE.MOUNTAIN.X_MIN));
+    check('forests have visible trees', landState.visibleTrees > 0, `${landState.visibleTrees} trees`);
+    check('no tree stands in a pond or lake', treesInWater() === 0, `${treesInWater()} trees in water`);
+
+    // A long jump down the road: everything must be recycled around the bus
+    bus.position.z -= 1500;
+    frames(10);
+    const forestsNearBus = land.forests.filter(patch => Math.abs(patch.position.z - bus.position.z) < 600).length;
+    const rangesNearBus = land.mountains.filter(range => Math.abs(range.position.z - bus.position.z) < 900).length;
+    check('forests and mountains follow the bus down the road',
+        forestsNearBus > 0 && rangesNearBus > 0, `${forestsNearBus} forests, ${rangesNearBus} ranges nearby`);
+    check('no tree stands in water after the landscape is recycled', treesInWater() === 0,
+        `${treesInWater()} trees in water`);
+
+    // ------------------------------------- feature: rounded vehicles and buildings
+    const sharpBoxes = (root) => {
+        let count = 0;
+        const walk = (node) => {
+            if (node.geometry && node.geometry.constructor.name === 'BoxGeometry') count += 1;
+            (node.children || []).forEach(walk);
+        };
+        walk(root);
+        return count;
+    };
+    const roundedTargets = [bus, ...globalThis.__aiCars, ...world.dhabas, ...world.pumps, globalThis.__busStand, ...globalThis.__busSim.stops];
+    const sharp = roundedTargets.reduce((n, item) => n + sharpBoxes(item), 0);
+    check('cars, the bus and the buildings use rounded boxes', sharp === 0, `${sharp} sharp boxes left`);
+    const carRoof = globalThis.__aiCars[0].children[1];
+    check('rounded boxes keep their real size for placement',
+        carRoof.geometry.parameters.height > 0.3 && carRoof.geometry.parameters.height < 1,
+        `car roof height ${carRoof.geometry.parameters.height.toFixed(2)}`);
+
     // ------------------------------------- feature: traffic lane changes
     // A car stuck behind a slower car should move into the clear outside lane.
     // The two cars are kept clear of the bus's road-end recycling band.
@@ -1034,6 +1106,45 @@ async function main() {
         cars[0].userData.laneX === constants.LANE_LEFT_OUTER &&
         Math.abs(cars[0].position.x - constants.LANE_LEFT_OUTER) < 0.5,
         `laneX=${cars[0].userData.laneX}, x=${cars[0].position.x.toFixed(2)}`);
+
+    // ------------------------------------- regression: a crash must not pin the bus
+    // Only one car on the road, just ahead in the bus's lane; the bus drives into it
+    {
+        const otherTraffic = globalThis.__aiCars.splice(1);
+        const target = globalThis.__aiCars[0];
+        releaseDrivingKeys();
+        bus.position.x = constants.LANE_LEFT;
+        bus.rotation.y = 0;
+        bus.userData.speed = 20;
+        target.position.set(constants.LANE_LEFT, 0, bus.position.z - 8);
+        target.rotation.y = 0;
+        target.userData.isOncoming = false;
+        target.userData.laneX = constants.LANE_LEFT;
+        target.userData.speed = target.userData.targetSpeed = 12;
+        target.userData.laneCooldown = 1e9;
+        target.userData.touchingBus = false;
+        const impactsBefore = bus.userData.impacts;
+        const zBeforeCrash = bus.position.z;
+
+        globalThis.__listeners.keydown.forEach(fn => fn({ code: 'KeyW', target: { tagName: 'BODY' }, preventDefault() {} }));
+        frames(180);
+        releaseDrivingKeys();
+
+        // Throttle is held throughout, so the bus rams the slower car a few separate
+        // times; counting every frame of contact would give dozens
+        check('each crash counts once, not on every frame of contact',
+            bus.userData.impacts - impactsBefore >= 1 && bus.userData.impacts - impactsBefore <= 6,
+            `${bus.userData.impacts - impactsBefore} crashes in 3 s`);
+        // A pinned bus barely moves; a free one covers well over 30 m in 3 s
+        check('the bus keeps driving after hitting a car',
+            zBeforeCrash - bus.position.z > 30, `${(zBeforeCrash - bus.position.z).toFixed(1)} m in 3 s`);
+        check('a car hit from behind is shoved forward and drives on',
+            target.position.z < bus.position.z && target.userData.speed > 5,
+            `car speed ${target.userData.speed.toFixed(1)} u/s`);
+
+        target.userData.laneCooldown = 0;
+        globalThis.__aiCars.push(...otherTraffic);
+    }
 
     // ------------------------------------- feature: smooth bus steering
     releaseDrivingKeys();
@@ -1094,6 +1205,8 @@ async function main() {
         sim.getState().fuelPercent > fuelAtPump,
         `fuel ${fuelAtPump}% → ${sim.getState().fuelPercent}%`);
 
+    // A stop can sit beside the pump, so let any open doors close first
+    for (let i = 0; i < 600 && sim.getState().doorsOpen; i++) frames(1);
     const stop = sim.stops[0];
     stop.userData.served = false;
     stop.userData.waiting = 5;
