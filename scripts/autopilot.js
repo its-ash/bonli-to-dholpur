@@ -9,8 +9,14 @@
 
 import {
     AUTOPILOT, LANE_LEFT, LANE_RIGHT,
-    LANES_FORWARD, LANES_ONCOMING, ROAD_HALF_WIDTH
+    LANES_FORWARD, LANES_ONCOMING, ROAD_HALF_WIDTH, PHYSICS, BUS_LENGTH
 } from './constants.js';
+import { roadHeading, lateralOffset } from './roadpath.js';
+
+// Turn rate of the road at z, in radians per metre driven (+ = bending left)
+function roadCurvature(z) {
+    return (roadHeading(z - 5) - roadHeading(z + 5)) / 10;
+}
 
 // Where the AI driver is in a manoeuvre
 const MODE = {
@@ -43,11 +49,22 @@ export function createAutopilot(bus, setKey, setSteer = () => {}) {
     // Lane the AI driver currently aims for
     let targetLaneX = LANE_LEFT;
 
+    // Optional route guide: () => {gap, hold} | null. `gap` is the distance to a
+    // place the AI should pull up at (a stop, a pump, the terminus); `hold` is
+    // true while the bus should stay put there.
+    let guide = null;
+    function setGuide(fn) {
+        guide = typeof fn === 'function' ? fn : null;
+    }
+
     // Normalise a lane so the bus always stays on its own side of the double
     // yellow line, even if it was left facing the wrong way.
-    function laneFor(x) {
-        return x > 0 ? LANE_RIGHT : LANE_LEFT;
+    function laneFor(lateral) {
+        return lateral > 0 ? LANE_RIGHT : LANE_LEFT;
     }
+
+    // Lateral position of the bus across the road (follows the bends)
+    const busLateral = () => lateralOffset(bus.position.x, bus.position.z);
 
     /**
      * The two lanes of this bus's direction of travel, as [inside, outside].
@@ -55,7 +72,7 @@ export function createAutopilot(bus, setKey, setSteer = () => {}) {
      * @returns {Array<number>}
      */
     function ownLanes() {
-        return bus.position.x > 0 ? LANES_ONCOMING : LANES_FORWARD;
+        return busLateral() > 0 ? LANES_ONCOMING : LANES_FORWARD;
     }
 
     function engage() {
@@ -67,7 +84,7 @@ export function createAutopilot(bus, setKey, setSteer = () => {}) {
         mode = MODE.CRUISE;
 
         // Start from whichever of its own lanes the bus is closest to
-        targetLaneX = laneFor(bus.position.x);
+        targetLaneX = laneFor(busLateral());
     }
 
     function releaseKeys() {
@@ -111,7 +128,7 @@ export function createAutopilot(bus, setKey, setSteer = () => {}) {
 
         for (const car of aiCars || []) {
             // Only vehicles roughly in that lane matter
-            if (Math.abs(car.position.x - laneX) > 2.6) continue;
+            if (Math.abs(lateralOffset(car.position.x, car.position.z) - laneX) > 2.6) continue;
 
             // Vehicles driving the other way are not something to follow
             if (car.userData.isOncoming) continue;
@@ -136,7 +153,7 @@ export function createAutopilot(bus, setKey, setSteer = () => {}) {
      */
     function isLaneClear(laneX, aiCars) {
         return !(aiCars || []).some(car => {
-            if (Math.abs(car.position.x - laneX) > 1.6) return false;
+            if (Math.abs(lateralOffset(car.position.x, car.position.z) - laneX) > 1.6) return false;
 
             // Positive means the car is in front of the bus
             const gap = bus.position.z - car.position.z;
@@ -151,7 +168,7 @@ export function createAutopilot(bus, setKey, setSteer = () => {}) {
      * @param {{vehicle: Object, gap: number}|null} ahead
      * @param {Array} aiCars
      */
-    function chooseLane(ahead, aiCars) {
+    function chooseLane(ahead, aiCars, target = null) {
         const [inside, outside] = ownLanes();
 
         if (mode === MODE.CRUISE) {
@@ -165,11 +182,16 @@ export function createAutopilot(bus, setKey, setSteer = () => {}) {
             if (isLaneClear(inside, aiCars)) {
                 mode = MODE.RETURNING;
             }
-        } else if (Math.abs(bus.position.x - inside) < 0.4) {
+        } else if (Math.abs(busLateral() - inside) < 0.4) {
             mode = MODE.CRUISE;
         }
 
         targetLaneX = mode === MODE.OVERTAKING ? outside : inside;
+
+        // Approaching a stop: use the kerb-side lane and never start a pass
+        if (target && target.gap < 160) {
+            if (mode === MODE.CRUISE) targetLaneX = outside;
+        }
 
         // Never aim outside the asphalt
         const edge = ROAD_HALF_WIDTH - bus.userData.width / 2 - 0.3;
@@ -186,14 +208,34 @@ export function createAutopilot(bus, setKey, setSteer = () => {}) {
 
         const data = bus.userData;
 
+        const target = guide ? guide() : null;
         const ahead = findTrafficAhead(aiCars, targetLaneX);
-        chooseLane(ahead, aiCars);
+        chooseLane(ahead, aiCars, target);
 
         // --- Speed: cruise (faster while passing), brake for traffic, stop if boxed in ---
         let desiredSpeed = Math.min(AUTOPILOT.CRUISE_SPEED, data.maxSpeed * 0.9);
 
         if (mode === MODE.OVERTAKING) {
             desiredSpeed = Math.min(data.maxSpeed * 0.95, AUTOPILOT.CRUISE_SPEED + AUTOPILOT.OVERTAKE_BOOST);
+        }
+
+        // Pull up at the next stop / pump / terminus: brake so the bus rolls to
+        // a halt on the spot
+        if (target) {
+            if (target.hold) {
+                desiredSpeed = 0;
+            } else {
+                const room = Math.max(0, target.gap - 2);
+                desiredSpeed = Math.min(desiredSpeed, Math.max(room < 1.5 ? 0 : 2.5, Math.sqrt(2 * 5 * room)));
+            }
+        }
+
+        // Red / amber signal ahead: stop short of the line, go on green
+        const sig = globalThis.__junctions?.signalAhead?.(bus.position.z - BUS_LENGTH / 2);
+        const waitingAtSignal = !!sig && (sig.state === 'red' || sig.state === 'amber') && sig.gap < 60;
+        if (waitingAtSignal) {
+            const room = Math.max(0, sig.gap - 3);
+            desiredSpeed = Math.min(desiredSpeed, room < 1.5 ? 0 : Math.max(1.5, Math.sqrt(2 * 4 * room)));
         }
 
         if (ahead) {
@@ -225,16 +267,27 @@ export function createAutopilot(bus, setKey, setSteer = () => {}) {
         // A positive rotation.y points the bus towards -X, so the heading is the
         // NEGATIVE of the lane error. The steering axis is proportional to how
         // far the bus is from that heading, so the wheel eases in and out.
-        const laneError = targetLaneX - bus.position.x;
-        const desiredHeading = Math.max(
+        // Everything is relative to the road: the lane error is measured across
+        // the road, the heading is the road's heading a little way ahead plus a
+        // lane-closing offset, and the steering gets a feed-forward for the
+        // bend (the wheel angle that holds the bus on the road's curve).
+        const lookAhead = Math.max(6, Math.min(24, 6 + Math.abs(data.speed) * 0.6));
+        const laneError = targetLaneX - busLateral();
+        const closing = Math.max(
             -AUTOPILOT.MAX_HEADING,
             Math.min(AUTOPILOT.MAX_HEADING, -laneError * AUTOPILOT.HEADING_GAIN)
         );
+        const desiredHeading = roadHeading(bus.position.z) + closing;
         const headingError = desiredHeading - bus.rotation.y;
-        setSteer(Math.max(-1, Math.min(1, headingError / AUTOPILOT.STEER_FULL)));
+        const feedForward = data.speed > 0.5
+            ? Math.atan(PHYSICS.BUS_WHEELBASE * roadCurvature(bus.position.z - lookAhead * 0.5)) / PHYSICS.BUS_MAX_STEER
+            : 0;
+        setSteer(Math.max(-1, Math.min(1, feedForward + headingError / AUTOPILOT.STEER_FULL)));
 
         // --- Give up when the bus cannot move any more ---
-        if (Math.abs(data.speed) < AUTOPILOT.STOPPED_SPEED) {
+        if (waitingAtSignal || (target && (target.hold || target.gap < 12))) {
+            stoppedFor = 0;     // waiting at a stop or a red light on purpose
+        } else if (Math.abs(data.speed) < AUTOPILOT.STOPPED_SPEED) {
             stoppedFor += dt;
             if (stoppedFor >= AUTOPILOT.STOPPED_TIME_LIMIT) {
                 disengage('AUTO STOPPED');
@@ -251,6 +304,7 @@ export function createAutopilot(bus, setKey, setSteer = () => {}) {
         disengage,
         toggle,
         update,
+        setGuide,
         isActive: () => active,
         getState: () => ({
             active,

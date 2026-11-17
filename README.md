@@ -1,8 +1,28 @@
-# Bus Driving Game — बौंली highway
+# Bus Simulator — बौंली → जयपुर
 
-A pixel-art 3D bus driving game built with Three.js. You pull out of an Indian
-bus stand onto a **four-lane highway that never ends**, past roadside dhabas,
-petrol pumps and Hindi distance boards — with an AUTO DRIVE mode for when you just want to watch.
+A 3D bus simulator built with Three.js. Drive a full **150 km trip from Bonli
+(बौंली) to Jaipur (जयपुर), ending at Sindhi Camp Bus Stand**. The route runs
+Bonli → Malarna Dungar → Lalsot → Dausa → Jaipur, with village stops in between
+(Bhagwatpura, Ramgarh Pachwara, Sikrai, Chandwaji). A trip takes about 11-15
+minutes. There is an AUTO DRIVE mode for when you just want to watch.
+
+### How to play
+
+1. Press **Start Trip** on the title screen (button, or `Enter`).
+2. Drive towards Jaipur. The progress bar at the top shows towns and villages; the
+   pill under it tells you the current objective.
+3. Pull up beside a bus stop shelter and stop: doors open, passengers board and
+   pay fares. Town stops (Malarna Dungar, Lalsot, Dausa) are compulsory: driving past
+   one costs a missed-stop penalty. Villages are optional extra fares.
+4. Watch the fuel gauge; use a petrol pump when the objective says fuel is low.
+   Running dry ends the trip.
+5. Stop at the Jaipur stand to finish. The summary shows time, passengers carried,
+   fares, safety and a 1-3 star rating. Best score is saved in your browser.
+   Press **Drive again** (or `R`) to restart.
+
+Score = fares + on-time bonus (finish under the par time) + safety points +
+arrival bonus, minus penalties for crashes, pedestrian hits and missed stops.
+Pause with `P` / `Esc`.
 
 Live site: **https://bonli.itsash.in** (GitHub Pages, see `CNAME`)
 
@@ -38,16 +58,41 @@ Three.js r160 is pulled from unpkg via the `<script type="importmap">` in
 | `A` / `←` | Steer left |
 | `D` / `→` | Steer right |
 | `N` | Next track |
-| `P` | Play / pause music |
-| `M` | Mute |
+| `P` / `Esc` | Pause the trip |
+| `Space` | Handbrake (hold) |
+| `Q` / `E` | Left / right indicator (toggle, blinking lamps) |
+| `L` | Headlights (toggle) |
+| `C` | Cycle camera: chase, cockpit, cinematic |
+| `M` | Mute / unmute everything (music and game sound) |
+| `N` | Next song |
+| ⚙ SOUND | Sound settings (title screen, pause screen, music panel): music and game sound each have an on/off switch and a volume slider, saved in the browser |
 | `H` | Horn |
+
+The bus has an automatic 6-speed gearbox (plus reverse) with RPM, torque curve,
+short shift pauses, engine braking and air brakes at stops. The dashboard shows
+speed (km/h), RPM, gear, fuel, indicator arrows and the headlight icon. Engine,
+gear-shift hiss, air brakes, indicator tick, gravel/shoulder rumble and wind are
+synthesised with WebAudio (`scripts/audio.js`) and start on the first key/tap.
+The cockpit camera has a dashboard and a steering wheel that turns with you.
 
 ### Mobile
 
-There is exactly **one** on-screen control: the **AUTO DRIVE** button pinned to
-the bottom of the screen. Tap it to start the AI driver, tap again to stop. The
-camera also pulls back automatically on narrow/portrait screens so more of the
-road stays visible.
+Phones and tablets get their own layout (portrait and landscape, notch-safe):
+
+- **Thumb pad** at the bottom: ◀ ▶ steer on the left, **BRAKE** and the taller
+  ▲ accelerator on the right. Each button tracks its own finger, so you can
+  hold the accelerator while steering.
+- **Round switches** above the pedals: indicators, headlights, handbrake (hold)
+  and camera.
+- **Info card** top-left: status, next town, distance, fuel / passengers /
+  fares, and the **AUTO DRIVE** button (touching the pad takes control back).
+- **♪** button top-left opens the sound settings; **❚❚** top-right pauses.
+- The dashboard sits between the pads (landscape) or above them (portrait).
+- Title, pause, summary and sound cards scroll on short screens.
+
+The camera pulls back automatically on narrow/portrait screens. Add `?touch=1`
+to the URL to try the phone layout on a desktop browser (`?touch=0` forces the
+desktop layout).
 
 ### AUTO DRIVE
 
@@ -84,10 +129,11 @@ bus needs a wider turn.
 | Petrol pumps | `scripts/petrolpump.js` | Canopy, two dispensers, cashier kiosk, readable brand board |
 | Bus stops, fuel, fares | `scripts/bussim.js` | Kerb-side shelters with waiting passengers, doors and fares, fuel burn and refuel, safety score, horn |
 | Forests, ponds, lakes, mountains | `scripts/landscape.js` | Instanced pine/broadleaf forests, ponds with reeds and lily pads, lakes with a jetty and a bobbing boat, rugged mountain ranges coloured by height with snow caps; all recycled along the road, and trees never stand in water |
-| Distance boards | `scripts/signs.js` | बौंली 12 km, सवाई माधोपुर 28 km, धौलपुर 46 km |
+| Distance boards | `scripts/signs.js` | लालसोट 62 km, दौसा 98 km, जयपुर 150 km |
 | AI traffic | `scripts/vehicles.js` | Same-direction cars in the near lanes, oncoming traffic across the centre line; a car stuck behind a slower one changes to the other lane of its direction when that lane is clear |
 | Pedestrians | `scripts/pedestrians.js` | Walking along the verges, recycled around the player |
 | Music | `scripts/music.js` | Plays `song/*.mp3`, auto-advances, starts on the first tap/key press |
+| Sound settings | `scripts/settings.js` | Music / game-sound switches and volumes, stored in localStorage |
 
 The road is **12 units wide with four 3-unit lanes** at x = −4.5, −1.5, +1.5 and
 +4.5, split by a double-yellow centre line at x = 0 and dashed dividers at ±3.
@@ -124,6 +170,7 @@ scripts/
   rounded.js            roundedBox(): rounded-edge boxes for vehicles and buildings
   hud.js                HUD, AUTO button, music panel, mobile layout
   music.js              music player
+  settings.js           sound settings (music / game sound volume, saved)
   touch.js              touch detection + on-screen pad
   utils.js              pixel-art canvas textures
 

@@ -10,8 +10,40 @@ const keys = {
     backward: false,
     left: false,
     right: false,
-    steer: 0
+    steer: 0,
+    // Held while the key / button is down
+    handbrake: false,
+    // Switches that stay on until toggled (not cleared by releaseAllKeys)
+    indicatorLeft: false,
+    indicatorRight: false,
+    headlights: false
 };
+
+// One-shot actions (camera cycle) are delivered to a listener set by main.js
+let actionHandler = null;
+export function setActionHandler(fn) {
+    actionHandler = typeof fn === 'function' ? fn : null;
+}
+
+/** Left indicator on/off (cancels the right one). */
+export function toggleIndicator(side) {
+    if (side === 'left') {
+        keys.indicatorLeft = !keys.indicatorLeft;
+        keys.indicatorRight = false;
+    } else {
+        keys.indicatorRight = !keys.indicatorRight;
+        keys.indicatorLeft = false;
+    }
+}
+
+export function toggleHeadlights() {
+    keys.headlights = !keys.headlights;
+}
+
+/** Asks the game to run a one-shot action ('camera'). */
+export function triggerAction(name) {
+    if (actionHandler) actionHandler(name);
+}
 
 const keyMap = {
     'KeyW': 'forward',
@@ -21,7 +53,8 @@ const keyMap = {
     'KeyA': 'left',
     'ArrowLeft': 'left',
     'KeyD': 'right',
-    'ArrowRight': 'right'
+    'ArrowRight': 'right',
+    'Space': 'handbrake'
 };
 
 // Every code that counts as "the player is driving" (used to cancel autopilot)
@@ -32,10 +65,19 @@ export function initInput() {
         const action = keyMap[e.code];
         if (action) {
             keys[action] = true;
-            if (e.code.startsWith('Arrow')) {
+            if (e.code.startsWith('Arrow') || e.code === 'Space') {
                 e.preventDefault();
             }
+            return;
         }
+
+        // Driver's switches: Q / E indicators, L headlights, C camera
+        if (e.repeat) return;
+        if (e.target && e.target.tagName === 'BUTTON') return;
+        if (e.code === 'KeyQ') toggleIndicator('left');
+        else if (e.code === 'KeyE') toggleIndicator('right');
+        else if (e.code === 'KeyL') toggleHeadlights();
+        else if (e.code === 'KeyC') triggerAction('camera');
     });
 
     window.addEventListener('keyup', (e) => {
@@ -82,5 +124,6 @@ export function releaseAllKeys() {
     keys.backward = false;
     keys.left = false;
     keys.right = false;
+    keys.handbrake = false;
     keys.steer = 0;
 }

@@ -11,6 +11,7 @@
 
 import * as THREE from 'three';
 import { DISTANCE_BOARDS, DISTANCE_BOARD_X } from './constants.js';
+import { registerAnimation } from './rounded.js';
 
 const TEXT_FONT = '"Noto Sans Devanagari", "Kohinoor Devanagari", "Nirmala UI", sans-serif';
 
@@ -108,7 +109,7 @@ export function createDistanceBoard({ name, km, side = -1 }) {
     const postHeight = 2.4;
 
     // --- Posts ---
-    const postMaterial = new THREE.MeshLambertMaterial({ color: 0xBFBFBF, flatShading: true });
+    const postMaterial = new THREE.MeshLambertMaterial({ color: 0xFFF1D6 });
     [-1, 1].forEach(end => {
         const post = new THREE.Mesh(
             new THREE.BoxGeometry(0.16, postHeight, 0.16),
@@ -149,6 +150,13 @@ export function createDistanceBoard({ name, km, side = -1 }) {
     );
     bar.position.set(0, postHeight - 0.3, 0);
     group.add(bar);
+
+    // Idle animation: the board sways very slightly in the breeze
+    const phase = Math.random() * 6;
+    registerAnimation(group, (t) => {
+        face.rotation.z = Math.sin(t * 1.3 + phase) * 0.012;
+        back.rotation.z = face.rotation.z;
+    });
 
     group.userData.isDistanceBoard = true;
     group.userData.townName = name;

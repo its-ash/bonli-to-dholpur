@@ -8,16 +8,11 @@
 // =============================================
 
 import * as THREE from 'three';
-import { BUS_SIM, PLAYER_START_Z } from './constants.js';
-import { recycleBehind } from './endless.js';
+import { BUS_SIM, ROUTE, PLAYER_START_Z } from './constants.js';
 import { roundedBox } from './rounded.js';
+import { roadPoint, lateralOffset } from './roadpath.js';
 
 const SIGN_FONT = '"Noto Sans Devanagari", "Nirmala UI", sans-serif';
-
-// First shelter sits this far ahead of the start, and shelters are kept this
-// far behind the bus before they are moved to the far end of the road
-const STOP_FIRST_LEAD = 180;
-const STOP_RECYCLE_BEHIND = 90;
 
 // Below this speed the bus counts as stopped (for stops and pumps)
 const STOPPED_SPEED = 1;
@@ -29,7 +24,7 @@ const PUMP_KERB_X = 3;
  * Draws the shelter sign: a yellow board with the words for bus stop.
  * @returns {THREE.CanvasTexture}
  */
-function createStopSignTexture() {
+function createStopSignTexture(name = '') {
     const canvas = document.createElement('canvas');
     canvas.width = 256;
     canvas.height = 128;
@@ -43,8 +38,15 @@ function createStopSignTexture() {
 
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = `bold 40px ${SIGN_FONT}`;
-    ctx.fillText('बस स्टॉप', 128, 66);
+    if (name) {
+        ctx.font = `bold ${name.length > 9 ? 30 : 38}px ${SIGN_FONT}`;
+        ctx.fillText(name, 128, 48);
+        ctx.font = `bold 26px ${SIGN_FONT}`;
+        ctx.fillText('बस स्टॉप', 128, 90);
+    } else {
+        ctx.font = `bold 40px ${SIGN_FONT}`;
+        ctx.fillText('बस स्टॉप', 128, 66);
+    }
 
     const texture = new THREE.CanvasTexture(canvas);
     texture.magFilter = THREE.LinearFilter;
@@ -58,7 +60,7 @@ function createStopSignTexture() {
  * faces the road. The shelter's local +X points at the road.
  * @returns {THREE.Group}
  */
-function createBusStop() {
+function createBusStop(name = '') {
     const stop = new THREE.Group();
 
     const frame = new THREE.MeshLambertMaterial({ color: 0xB0B0B0 });
@@ -80,7 +82,7 @@ function createBusStop() {
     add(roundedBox(0.12, 2.5, 0.12), frame, 0.5, 1.25, 1.5);
     add(roundedBox(0.6, 0.12, 2.6), bench, -0.5, 0.45, 0);     // bench
 
-    const signTexture = createStopSignTexture();
+    const signTexture = createStopSignTexture(name);
     const sign = new THREE.Mesh(
         new THREE.PlaneGeometry(1.6, 0.8),
         new THREE.MeshBasicMaterial({ map: signTexture })
@@ -96,14 +98,23 @@ function createBusStop() {
 }
 
 /**
- * Moves a shelter to a new z, with a fresh crowd waiting at it.
+ * Puts a shelter at a route stop, with a crowd waiting at it. Towns have
+ * bigger crowds than villages.
  * @param {THREE.Group} stop
- * @param {number} z
+ * @param {Object} config - an entry of ROUTE.STOPS
  */
-function placeStop(stop, z) {
-    stop.position.set(BUS_SIM.STOP_X, 0, z);
+function placeStop(stop, config) {
+    // Beside the road (STOP_X is a distance from the centre line), square to it
+    const p = roadPoint(PLAYER_START_Z - config.km * ROUTE.UNITS_PER_KM, BUS_SIM.STOP_X);
+    stop.position.set(p.x, 0, p.z);
+    stop.rotation.y = p.heading;
+    const [min, max] = config.kind === 'town' ? ROUTE.TOWN_WAITING : ROUTE.VILLAGE_WAITING;
     stop.userData.served = false;
-    stop.userData.waiting = Math.floor(Math.random() * (BUS_SIM.STOP_WAITING_MAX + 1));
+    stop.userData.waiting = min + Math.floor(Math.random() * (max - min + 1));
+    stop.userData.routeStop = config;
+    stop.userData.stopId = config.id;
+    stop.userData.stopName = config.name;
+    stop.userData.stopKind = config.kind;
 }
 
 /**
@@ -114,17 +125,19 @@ function placeStop(stop, z) {
  *   stops: Array<THREE.Group>,
  *   update: (dt: number) => void,
  *   honk: () => void,
+ *   setHornVolume: (volume: number) => void,
  *   getState: () => {fuelPercent: number, passengers: number, capacity: number,
  *                    fares: number, safety: number, doorsOpen: boolean, message: string}
  * }}
  */
-export function createBusSim({ bus, scene, pumps = [] }) {
+export function createBusSim({ bus, scene, pumps = [], onStopServed = null }) {
     const data = bus.userData;
 
+    // One shelter per route stop, standing where the route says
     const stops = [];
-    for (let i = 0; i < BUS_SIM.STOP_COUNT; i++) {
-        const stop = createBusStop();
-        placeStop(stop, PLAYER_START_Z - STOP_FIRST_LEAD - i * BUS_SIM.STOP_SPACING_MIN);
+    for (const config of ROUTE.STOPS) {
+        const stop = createBusStop(config.name);
+        placeStop(stop, config);
         scene.add(stop);
         stops.push(stop);
     }
@@ -132,6 +145,7 @@ export function createBusSim({ bus, scene, pumps = [] }) {
     const state = {
         fuel: BUS_SIM.FUEL_CAPACITY,   // litres
         passengers: 0,
+        carried: 0,                    // passengers who boarded during the trip
         fares: 0,                      // rupees earned so far
         safety: BUS_SIM.SAFETY_MAX,
         dwell: 0,                      // seconds left with the doors open
@@ -141,22 +155,24 @@ export function createBusSim({ bus, scene, pumps = [] }) {
     };
 
     let audio = null;
+    let hornVolume = 1;     // 0..1, follows the game-sound setting
 
     /** @returns {THREE.Group|null} an unserved shelter the bus is stopped at */
     function findStopAtBus() {
         return stops.find(stop =>
             !stop.userData.served &&
             Math.abs(bus.position.z - stop.position.z) < BUS_SIM.STOP_ZONE &&
-            Math.abs(bus.position.x - BUS_SIM.STOP_X) < BUS_SIM.STOP_KERB_X
+            Math.abs(lateralOffset(bus.position.x, bus.position.z) - BUS_SIM.STOP_X) < BUS_SIM.STOP_KERB_X
         ) || null;
     }
 
     /** @returns {THREE.Group|null} the petrol pump whose forecourt the bus is on */
     function findPumpAtBus() {
+        const lateral = lateralOffset(bus.position.x, bus.position.z);
         return pumps.find(pump =>
             Math.abs(bus.position.z - pump.position.z) < BUS_SIM.PUMP_ZONE &&
-            Math.sign(bus.position.x) === pump.userData.side &&
-            Math.abs(bus.position.x) > PUMP_KERB_X
+            Math.sign(lateral) === pump.userData.side &&
+            Math.abs(lateral) > PUMP_KERB_X
         ) || null;
     }
 
@@ -171,19 +187,33 @@ export function createBusSim({ bus, scene, pumps = [] }) {
 
         const boarding = Math.min(stop.userData.waiting, BUS_SIM.PASSENGER_CAPACITY - state.passengers);
         state.passengers += boarding;
+        state.carried += boarding;
         state.fares += boarding * BUS_SIM.FARE * (state.safety / BUS_SIM.SAFETY_MAX);
 
         stop.userData.waiting = 0;
         stop.userData.served = true;
         state.dwell = BUS_SIM.STOP_DWELL;
         data.doorsOpen = true;
+        if (onStopServed && stop.userData.stopId) onStopServed(stop.userData.stopId);
+    }
+
+    /** Ends the trip at the terminus: everyone gets off and the doors open. */
+    function finish() {
+        state.passengers = 0;
+        state.dwell = 0;
+        data.doorsOpen = true;
+        data.speed = 0;
     }
 
     /** Charges the safety score for every new crash and pedestrian hit. */
     function updateSafety() {
+        // Red lights run (counted by junctions.js in data.redLightRuns) cost 6 safety each
+        const redRuns = data.redLightRuns || 0;
         const lost =
             (data.impacts - state.seen.impacts) * BUS_SIM.SAFETY_CAR_HIT +
-            (data.pedestrianHits - state.seen.pedestrianHits) * BUS_SIM.SAFETY_PEDESTRIAN_HIT;
+            (data.pedestrianHits - state.seen.pedestrianHits) * BUS_SIM.SAFETY_PEDESTRIAN_HIT +
+            (redRuns - (state.redSeen || 0)) * 6;
+        state.redSeen = redRuns;
 
         state.seen = {
             impacts: data.impacts,
@@ -197,13 +227,6 @@ export function createBusSim({ bus, scene, pumps = [] }) {
      * @param {number} dt - Delta time in seconds
      */
     function update(dt) {
-        recycleBehind(stops, bus.position.z, {
-            behind: STOP_RECYCLE_BEHIND,
-            gapFor: () => BUS_SIM.STOP_SPACING_MIN +
-                Math.random() * (BUS_SIM.STOP_SPACING_MAX - BUS_SIM.STOP_SPACING_MIN),
-            place: placeStop
-        });
-
         const stopped = Math.abs(data.speed) < STOPPED_SPEED;
 
         // --- Stops: doors open for a while once the bus has pulled up ---
@@ -223,7 +246,7 @@ export function createBusSim({ bus, scene, pumps = [] }) {
             state.fuel = Math.min(BUS_SIM.FUEL_CAPACITY, state.fuel + BUS_SIM.REFUEL_RATE * dt);
         } else {
             const load = Math.min(1, Math.abs(data.speed) / data.maxSpeed);
-            const burn = BUS_SIM.FUEL_IDLE_RATE + BUS_SIM.FUEL_DRIVE_RATE * load;
+            const burn = (BUS_SIM.FUEL_IDLE_RATE + BUS_SIM.FUEL_DRIVE_RATE * load) * ROUTE.FUEL_BURN_SCALE;
             state.fuel = Math.max(0, state.fuel - burn * dt);
         }
         data.noFuel = state.fuel <= 0;
@@ -237,7 +260,7 @@ export function createBusSim({ bus, scene, pumps = [] }) {
      */
     function honk() {
         const Context = globalThis.AudioContext || globalThis.webkitAudioContext;
-        if (!Context) return;
+        if (!Context || hornVolume <= 0) return;
 
         audio = audio || new Context();
         if (audio.state === 'suspended') audio.resume();
@@ -247,8 +270,9 @@ export function createBusSim({ bus, scene, pumps = [] }) {
         const gain = audio.createGain();
         oscillator.type = 'square';
         oscillator.frequency.value = BUS_SIM.HORN_FREQUENCY;
-        gain.gain.setValueAtTime(0.12, now);
-        gain.gain.setValueAtTime(0.12, now + 0.35);
+        const peak = 0.12 * hornVolume;
+        gain.gain.setValueAtTime(peak, now);
+        gain.gain.setValueAtTime(peak, now + 0.35);
         gain.gain.linearRampToValueAtTime(0, now + 0.45);
         oscillator.connect(gain);
         gain.connect(audio.destination);
@@ -269,7 +293,17 @@ export function createBusSim({ bus, scene, pumps = [] }) {
         stops,
         update,
         honk,
+        /** @param {number} value - 0..1 (0 silences the horn) */
+        setHornVolume(value) {
+            const v = Number(value);
+            hornVolume = Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 1;
+        },
+        finish,
         getState: () => ({
+            carried: state.carried,
+            impacts: state.seen.impacts,
+            pedestrianHits: state.seen.pedestrianHits,
+            noFuel: state.fuel <= 0,
             fuelPercent: Math.round((state.fuel / BUS_SIM.FUEL_CAPACITY) * 100),
             passengers: state.passengers,
             capacity: BUS_SIM.PASSENGER_CAPACITY,

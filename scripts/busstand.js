@@ -8,7 +8,8 @@
 
 import * as THREE from 'three';
 import { ROAD_HALF_WIDTH, SHOULDER_WIDTH, BUS_LENGTH, PLAYER_START_Z } from './constants.js';
-import { roundedBox } from './rounded.js';
+import { roadPoint } from './roadpath.js';
+import { roundedBox, registerAnimation } from './rounded.js';
 
 const SIGN_FONT = '"Noto Sans Devanagari", "Nirmala UI", sans-serif';
 
@@ -108,6 +109,18 @@ function createWaitingPassenger(variant) {
     bag.castShadow = true;
     person.add(bag);
 
+    // Right arm on a shoulder pivot, so a passenger can wave at the bus
+    const waveArm = new THREE.Group();
+    waveArm.position.set(0.24, 0.85, 0);
+    const arm = new THREE.Mesh(
+        roundedBox(0.1, 0.4, 0.1),
+        new THREE.MeshLambertMaterial({ color: skins[variant % skins.length] })
+    );
+    arm.position.y = -0.2;
+    waveArm.add(arm);
+    person.add(waveArm);
+    person.userData.waveArm = waveArm;
+
     person.userData.isWaitingPassenger = true;
     return person;
 }
@@ -123,7 +136,7 @@ function createWaitingPassenger(variant) {
  * @param {number} [options.z] - Where along the road the stand is built
  * @returns {THREE.Group}
  */
-export function createBusStand({ z = PLAYER_START_Z + 10 } = {}) {
+export function createBusStand({ z = PLAYER_START_Z + 10, name = 'बौंली' } = {}) {
     const stand = new THREE.Group();
 
     // --- Bay platform, set back from the shoulder on the bus's side ---
@@ -150,11 +163,26 @@ export function createBusStand({ z = PLAYER_START_Z + 10 } = {}) {
     const canopyHeight = 3.6;
     const canopy = new THREE.Mesh(
         roundedBox(9, 0.3, platformLength + 4),
-        new THREE.MeshLambertMaterial({ color: 0x4A6FA5 })
+        new THREE.MeshLambertMaterial({ color: 0x9AD1FF })
     );
     canopy.position.set(platformX - 1.5, canopyHeight, 0);
     canopy.castShadow = true;
     stand.add(canopy);
+
+    // Bunting along the canopy edge, fluttering
+    const buntingColors = [0xFF8FA8, 0xFFD166, 0x9BE8B5, 0xC9A8F5];
+    const bunting = [];
+    for (let i = 0; i < 14; i++) {
+        const flag = new THREE.Mesh(
+            new THREE.ConeGeometry(0.2, 0.4, 3),
+            new THREE.MeshLambertMaterial({ color: buntingColors[i % buntingColors.length] })
+        );
+        flag.rotation.x = Math.PI;
+        flag.position.set(platformX + 2.9, canopyHeight - 0.4, -platformLength / 2 + 1 + i * (platformLength / 14));
+        flag.userData.i = i;
+        stand.add(flag);
+        bunting.push(flag);
+    }
 
     // Canopy support pillars
     [-platformLength / 2 + 1, 0, platformLength / 2 - 1].forEach(offsetZ => {
@@ -198,7 +226,7 @@ export function createBusStand({ z = PLAYER_START_Z + 10 } = {}) {
     const sign = new THREE.Mesh(
         new THREE.PlaneGeometry(6.4, 2.0),
         new THREE.MeshBasicMaterial({
-            map: createBusStandSignTexture(['बस स्टैंड', 'बौंली'])
+            map: createBusStandSignTexture(['बस स्टैंड', name])
         })
     );
     sign.position.set(platformX + 3.1, canopyHeight + 1.3, 0);
@@ -238,11 +266,27 @@ export function createBusStand({ z = PLAYER_START_Z + 10 } = {}) {
     bench.castShadow = true;
     stand.add(bench);
 
-    stand.position.z = z;
+    // Sit on the road's centre line (the road bends) and follow its heading
+    const at = roadPoint(z, 0);
+    stand.position.x = at.x;
+    stand.position.z = at.z;
+    stand.rotation.y = at.heading;
+
+    // Idle animation: bunting flutter and gently swaying waiting passengers,
+    // one of whom waves now and then (ticked via the rounded.js registry)
+    registerAnimation(stand, (t) => {
+        bunting.forEach(f => { f.rotation.z = Math.sin(t * 5 + f.userData.i * 0.8) * 0.25; });
+        passengers.forEach((p, i) => {
+            p.rotation.z = Math.sin(t * 1.5 + i * 1.7) * 0.03;
+            p.position.y = 0.25 + Math.abs(Math.sin(t * 1.1 + i)) * 0.012;
+            p.userData.waveArm.rotation.z = (i === 1 && Math.sin(t * 0.5) > 0.6) ? Math.sin(t * 10) * 0.5 : 0;
+            p.userData.waveArm.rotation.x = (i === 1 && Math.sin(t * 0.5) > 0.6) ? Math.PI * 0.9 : 0;
+        });
+    });
 
     stand.userData.isBusStand = true;
     stand.userData.passengers = passengers;
-    stand.userData.signLines = ['बस स्टैंड', 'बौंली'];
+    stand.userData.signLines = ['बस स्टैंड', name];
     stand.userData.platformX = platformX;
 
     return stand;
@@ -252,6 +296,6 @@ export function createBusStand({ z = PLAYER_START_Z + 10 } = {}) {
  * Names shown on the bus stand board.
  * @returns {Array<string>}
  */
-export function busStandSignLines() {
-    return ['बस स्टैंड', 'बौंली'];
+export function busStandSignLines(name = 'बौंली') {
+    return ['बस स्टैंड', name];
 }

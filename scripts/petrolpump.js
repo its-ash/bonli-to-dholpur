@@ -6,7 +6,7 @@
 // =============================================
 
 import * as THREE from 'three';
-import { roundedBox } from './rounded.js';
+import { roundedBox, registerAnimation, pastel, setHex } from './rounded.js';
 
 const SIGN_FONT = '"Noto Sans Devanagari", "Nirmala UI", sans-serif';
 
@@ -133,6 +133,7 @@ function createDispenser(trim) {
     dispenser.add(arm);
 
     dispenser.userData.isDispenser = true;
+    dispenser.userData.display = display;
     return dispenser;
 }
 
@@ -148,7 +149,9 @@ function createDispenser(trim) {
  */
 export function createPetrolPump(side = 1, variant = 0) {
     const pump = new THREE.Group();
-    const colors = PUMP_VARIANTS[((variant % PUMP_VARIANTS.length) + PUMP_VARIANTS.length) % PUMP_VARIANTS.length];
+    const base = PUMP_VARIANTS[((variant % PUMP_VARIANTS.length) + PUMP_VARIANTS.length) % PUMP_VARIANTS.length];
+    // Soft candy pastel canopy/trim; the sign board keeps its contrast for readability
+    const colors = { ...base, canopy: pastel(base.canopy, 0.45), trim: pastel(base.trim, 0.4) };
 
     const forecourtZ = 26;   // forecourt length along the road
     const forecourtX = 13;   // how far it reaches away from the road
@@ -275,13 +278,22 @@ export function createPetrolPump(side = 1, variant = 0) {
     const airStand = new THREE.Group();
     const airBody = new THREE.Mesh(
         roundedBox(0.5, 1.1, 0.5),
-        new THREE.MeshLambertMaterial({ color: 0x2E7D32 })
+        new THREE.MeshLambertMaterial({ color: 0x7FD6A0 })
     );
     airBody.position.y = 0.55;
     airBody.castShadow = true;
     airStand.add(airBody);
     airStand.position.set(front * (forecourtX / 2 - 2.5), 0.2, forecourtZ / 2 - 5);
     pump.add(airStand);
+
+    // Idle animation: dispenser displays blink, the air stand light pulses
+    registerAnimation(pump, (t) => {
+        dispensers.forEach((d, i) => {
+            const on = Math.sin(t * 2.4 + i * 1.7) > -0.3;
+            setHex(d.userData.display.material, on ? 0x7FF0C0 : 0x2B3A36);
+        });
+        setHex(airBody.material, Math.sin(t * 3) > 0.7 ? 0xA8F0B8 : 0x7FD6A0);
+    });
 
     pump.userData.isPetrolPump = true;
     pump.userData.stationName = colors.name;

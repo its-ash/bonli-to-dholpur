@@ -14,8 +14,10 @@
 import * as THREE from 'three';
 import { LANDSCAPE, PLAYER_START_Z } from './constants.js';
 import { recycleBehind } from './endless.js';
+import { makeSway, updateEnvironment } from './environment.js';
+import { roadCenterX } from './roadpath.js';
 
-const { FOREST, POND, LAKE, MOUNTAIN } = LANDSCAPE;
+const { FOREST, POND, LAKE, MOUNTAIN, CLOUD, ISLAND } = LANDSCAPE;
 
 // Shore and water sit just above the ground; polygon offsets settle any overlap
 const SHORE_Y = 0.06;
@@ -24,17 +26,18 @@ const WATER_Y = 0.1;
 // Scale given to an instance that must not be seen (a tree standing in water)
 const HIDDEN = 1e-4;
 
-const PINE_COLORS = [0x1F3B26, 0x24452B, 0x2B4F30, 0x1A3322];
-const BROADLEAF_COLORS = [0x3E6B2F, 0x4A7A35, 0x557F3A, 0x35602A, 0x6B8A3A];
-const BUSH_COLORS = [0x2F5A2A, 0x3C6630, 0x4B6E2E];
-const TRUNK_COLORS = [0x4A3728, 0x3E2E22, 0x5A4532];
-const ROCK_COLORS = [0x7A7468, 0x6A655C, 0x8A8478, 0x5E5A52];
-const REED_COLORS = [0x6B7F3A, 0x7F8A45, 0x5C6E33];
-const LILY_COLORS = [0x3E7A3A, 0x4C8A3E, 0x356B33];
-const MOUNTAIN_FOREST = 0x2F4A2A;
-const MOUNTAIN_SCRUB = 0x5A6B3C;
-const MOUNTAIN_ROCK = [0x6E655A, 0x7A7266, 0x625B52];
-const MOUNTAIN_SNOW = 0xF2F4F7;
+const PINE_COLORS = [0x7FD6B8, 0x8EDDA8, 0x9BE3C4, 0x74CDB0];
+const BROADLEAF_COLORS = [0xA9E07A, 0xFFA8C8, 0xFFC49B, 0xB6E88C, 0x8EDDA8, 0xF7B6D8];
+const BUSH_COLORS = [0x9BE08C, 0xFFB9D2, 0xC4EE9A];
+const TRUNK_COLORS = [0xC49A74, 0xB88C68, 0xD0A882];
+const ROCK_COLORS = [0xE6D5C8, 0xD9C6BA, 0xEFE1D3, 0xCDBBB4];
+const REED_COLORS = [0xA9D98A, 0xBCE59A, 0x94CF86];
+const LILY_COLORS = [0x7FD68F, 0x93E09E, 0x6CCB86];
+// Earthy cliff bands of the plateaus and the undersides of floating islands
+const CLIFF_COLORS = [0xE8B98F, 0xDDA383, 0xF0CBA0, 0xD6957D];
+const CLIFF_BASE = 0xB9806E;
+const CLIFF_DEEP = 0x9C6B67;
+const GRASS_CAP = 0xB5E8A0;
 
 const rand = (min, max) => min + Math.random() * (max - min);
 const pick = (list) => list[Math.floor(Math.random() * list.length)];
@@ -96,7 +99,7 @@ function createRippleTexture() {
     canvas.height = size;
     const ctx = canvas.getContext('2d');
 
-    ctx.fillStyle = '#2B5B78';
+    ctx.fillStyle = '#6FE0D8';
     ctx.fillRect(0, 0, size, size);
 
     // Each mark is drawn four times so it wraps across the tile edges
@@ -105,10 +108,10 @@ function createRippleTexture() {
     };
 
     for (let i = 0; i < 70; i++) {
-        ctx.fillStyle = Math.random() < 0.5 ? 'rgba(20, 60, 85, 0.35)' : 'rgba(70, 120, 150, 0.25)';
+        ctx.fillStyle = Math.random() < 0.5 ? 'rgba(30, 160, 175, 0.30)' : 'rgba(150, 240, 235, 0.30)';
         wrapped(Math.random() * size, Math.random() * size, 6 + Math.random() * 20, 2 + Math.random() * 4);
     }
-    ctx.fillStyle = 'rgba(205, 228, 242, 0.55)';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
     for (let i = 0; i < 45; i++) {
         wrapped(Math.random() * size, Math.random() * size, 3 + Math.random() * 8, 1);
     }
@@ -131,8 +134,9 @@ function createRippleTexture() {
  * @param {boolean} snowy
  * @returns {THREE.BufferGeometry}
  */
-function createMountainGeometry(radius, height, snowy) {
-    const geometry = new THREE.ConeGeometry(radius, height, 14, 7, true);
+function createMountainGeometry(radius, height) {
+    // A flat-topped plateau: wide top rim, slightly flared foot, banded earth sides
+    const geometry = new THREE.CylinderGeometry(radius * 0.8, radius, height, 14, 8, true);
     const position = geometry.attributes && geometry.attributes.position;
     if (!position) return geometry;
 
@@ -145,29 +149,62 @@ function createMountainGeometry(radius, height, snowy) {
         let x = position.getX(i);
         let y = position.getY(i);
         let z = position.getZ(i);
-        const t = (y + height / 2) / height;   // 0 at the base, 1 at the summit
+        const t = (y + height / 2) / height;   // 0 at the foot, 1 at the rim
         const n = hashNoise(round(x), round(y), round(z), seed);
 
-        // The base ring and summit stay put; the slopes become ridges and gullies
-        if (t > 0.001 && t < 0.999) {
-            const k = 1 + 0.22 * n;
+        // Gentle lumps, never at the very rim so the top stays round
+        if (t < 0.999) {
+            const k = 1 + 0.08 * n;
             x *= k;
             z *= k;
-            y += n * height * 0.05;
         }
         position.setXYZ(i, x, y, z);
 
-        const level = t + n * 0.07;
-        let hex = MOUNTAIN_FOREST;
-        if (snowy && level > 0.72) hex = MOUNTAIN_SNOW;
-        else if (level > 0.4) hex = MOUNTAIN_ROCK[Math.floor(((n + 1) / 2) * MOUNTAIN_ROCK.length) % MOUNTAIN_ROCK.length];
-        else if (level > 0.15) hex = MOUNTAIN_SCRUB;
-        color.set(hex);
+        // Horizontal earth bands, lighter near the top, rosier at the foot
+        const band = CLIFF_COLORS[Math.floor(t * 9 + n * 0.4 + 20) % CLIFF_COLORS.length];
+        color.set(t < 0.12 ? CLIFF_BASE : band);
         colors.push(color.r, color.g, color.b);
     }
 
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
     geometry.translate(0, height / 2, 0);
+    geometry.computeVertexNormals();
+    return geometry;
+}
+
+/**
+ * The underside of a floating island: an upside-down, lumpy cone that fades
+ * from peach clay at the rim to dusty rose at the tip.
+ */
+function createIslandRockGeometry(radius, depth) {
+    const geometry = new THREE.ConeGeometry(radius, depth, 10, 4, true);
+    const position = geometry.attributes && geometry.attributes.position;
+    if (!position) return geometry;
+    if (geometry.rotateX) geometry.rotateX(Math.PI);
+
+    const seed = Math.random() * 100;
+    const round = (v) => Math.round(v * 100) / 100;
+    const color = new THREE.Color();
+    const deep = new THREE.Color(CLIFF_DEEP);
+    const colors = [];
+    for (let i = 0; i < position.count; i++) {
+        let x = position.getX(i);
+        let y = position.getY(i);
+        let z = position.getZ(i);
+        const t = (y + depth / 2) / depth;     // 0 at the tip, 1 at the rim
+        const n = hashNoise(round(x), round(y), round(z), seed);
+        if (t < 0.99) {
+            const k = 1 + 0.18 * n;
+            x *= k;
+            z *= k;
+            y += n * depth * 0.06;
+        }
+        position.setXYZ(i, x, y, z);
+        color.set(CLIFF_COLORS[Math.floor(t * 5 + n * 0.5 + 20) % CLIFF_COLORS.length]).lerp(deep, 1 - t);
+        colors.push(color.r, color.g, color.b);
+    }
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    geometry.translate(0, -depth / 2, 0);
     geometry.computeVertexNormals();
     return geometry;
 }
@@ -187,43 +224,90 @@ function createMountainGeometry(radius, height, snowy) {
 export function createLandscape({ bus, scene }) {
     const startZ = PLAYER_START_Z;
 
+    // --- Biome awareness -------------------------------------------------
+    // setBiomeWeights() gives the zone mix at the bus; an optional sampler
+    // (route distance -> weights) lets every item use the mix at its own z, so
+    // scenery far ahead already suits the zone it will stand in.
+    let biomeWeights = { farmland: 1, mountain: 0, desert: 0, coast: 0 };
+    let biomeSampler = null;
+    const lerp = (a, b, t) => a + (b - a) * t;
+
+    function zoneWeightsAt(z) {
+        return biomeSampler ? biomeSampler(startZ - z) : biomeWeights;
+    }
+
+    // How much of each kind of scenery a zone mix keeps (0..1)
+    const keepForests = (w) => w.farmland + 0.45 * w.mountain + 0.05 * w.coast;
+    const keepPonds = (w) => w.farmland + 0.1 * w.mountain;
+    const keepLakes = (w) => w.farmland + 0.35 * w.mountain;
+    const keepIslands = (w) => w.farmland + 0.7 * w.mountain + 0.3 * w.desert + 0.5 * w.coast;
+    const keepRanges = (w) => w.farmland + w.mountain + 0.25 * w.desert + 0.3 * w.coast;
+
+    /** Hides the items a zone mix does not keep (each item has a random key). */
+    function applyBiomeVisibility() {
+        const apply = (items, keep) => items.forEach(item => {
+            const key = item.userData.key;
+            item.visible = key === undefined || key < keep(zoneWeightsAt(item.position.z));
+        });
+        apply(forests, keepForests);
+        apply(ponds, keepPonds);
+        apply(lakes, keepLakes);
+        apply(islands, keepIslands);
+        apply(mountains, keepRanges);
+    }
+
     // --- Shared geometry and materials --------------------------------
     const dummy = new THREE.Object3D();
     const tint = new THREE.Color();
 
-    const flat = (color = 0xFFFFFF) => new THREE.MeshLambertMaterial({ color, flatShading: true });
+    // Smooth shading everywhere: the toy look comes from round shapes, not facets
+    const flat = (color = 0xFFFFFF) => new THREE.MeshLambertMaterial({ color });
 
-    const trunkGeometry = lift(new THREE.CylinderGeometry(0.16, 0.26, 2.6, 6), 1.3);
-    const pineLowGeometry = lift(new THREE.ConeGeometry(1.9, 3.8, 8), 3.3);
-    const pineHighGeometry = lift(new THREE.ConeGeometry(1.3, 3.2, 8), 5.2);
-    const crownGeometry = lift(new THREE.IcosahedronGeometry(2.0, 1), 3.9);
-    const bushGeometry = lift(new THREE.IcosahedronGeometry(0.9, 0), 0.55);
-    const rockGeometry = new THREE.IcosahedronGeometry(1, 0);
+    const trunkGeometry = lift(new THREE.CylinderGeometry(0.16, 0.26, 2.6, 8), 1.3);
+    const pineLowGeometry = lift(new THREE.SphereGeometry(1.7, 12, 10), 3.4);
+    const pineHighGeometry = lift(new THREE.SphereGeometry(1.15, 12, 10), 5.4);
+    const crownGeometry = lift(new THREE.IcosahedronGeometry(2.0, 2), 3.9);
+    const bushGeometry = lift(new THREE.IcosahedronGeometry(0.9, 1), 0.55);
+    const rockGeometry = new THREE.IcosahedronGeometry(1, 1);
     const reedGeometry = lift(new THREE.BoxGeometry(0.07, 1.6, 0.07), 0.8);
     const lilyGeometry = new THREE.CircleGeometry(0.5, 8);
     const discGeometry = new THREE.CircleGeometry(1, 40);
 
-    const trunkMaterial = flat();
-    const pineMaterial = flat();
-    const broadleafMaterial = flat();
-    const bushMaterial = flat();
+    // Trunks, crowns and bushes sway in the wind (vertex shader, shared clock)
+    const trunkMaterial = makeSway(flat(), 0.02);
+    const pineMaterial = makeSway(flat(), 0.05);
+    const broadleafMaterial = makeSway(flat(), 0.05);
+    const bushMaterial = makeSway(flat(), 0.08);
     const rockMaterial = flat();
-    const reedMaterial = flat();
-    const mountainMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+    const reedMaterial = makeSway(flat(), 0.12);
+    const mountainMaterial = new THREE.MeshLambertMaterial({ vertexColors: true });
+    const grassCapMaterial = flat(GRASS_CAP);
+    const islandGrassMaterial = flat(0xA9E88F);
+    const islandRockMaterial = new THREE.MeshLambertMaterial({ vertexColors: true });
+    const cloudMaterial = new THREE.MeshLambertMaterial({
+        color: 0xFFFFFF,
+        emissive: 0xC9D3E6,
+        fog: false
+    });
+    const capGeometry = new THREE.SphereGeometry(1, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2);
+    const puffGeometry = new THREE.SphereGeometry(1, 12, 8);
 
     const rippleTexture = createRippleTexture();
     // Overlapping ellipses each get their own polygon offset, so the upper one
     // always wins the depth test and the ripples never flicker
     const waterMaterials = [0, 1, 2].map(i => new THREE.MeshStandardMaterial({
         map: rippleTexture,
-        roughness: 0.18,
-        metalness: 0.05,
+        color: 0xCFFFFA,
+        emissive: 0x2AC4C0,
+        emissiveIntensity: 0.15,
+        roughness: 0.06,
+        metalness: 0.15,
         polygonOffset: true,
         polygonOffsetFactor: -2 - i,
         polygonOffsetUnits: -2 - i
     }));
     const shoreMaterial = new THREE.MeshLambertMaterial({
-        color: 0xA89268,
+        color: 0xF6E3B8,
         polygonOffset: true,
         polygonOffsetFactor: -1,
         polygonOffsetUnits: -1
@@ -417,7 +501,9 @@ export function createLandscape({ bus, scene }) {
 
     function placeWater(body, z) {
         const cfg = body.userData.kind === 'lake' ? LAKE : POND;
-        body.position.set(body.userData.side * rand(cfg.X_MIN, cfg.X_MAX), 0, z);
+        // Offsets are measured from the (bending) road centre line
+        body.position.set(roadCenterX(z) + body.userData.side * rand(cfg.X_MIN, cfg.X_MAX), 0, z);
+        body.userData.key = Math.random();
         shapeWater(body, cfg);
     }
 
@@ -501,7 +587,8 @@ export function createLandscape({ bus, scene }) {
 
     function placeForest(patch, z, water) {
         const side = patch.userData.side;
-        patch.position.set(side * rand(FOREST.X_MIN, FOREST.X_MAX), 0, z);
+        patch.position.set(roadCenterX(z) + side * rand(FOREST.X_MIN, FOREST.X_MAX), 0, z);
+        patch.userData.key = Math.random();
         seedForest(patch);
         layoutForest(patch, water);
     }
@@ -511,8 +598,16 @@ export function createLandscape({ bus, scene }) {
         const range = new THREE.Group();
         const peaks = [];
         for (let i = 0; i < MOUNTAIN.PEAKS; i++) {
-            const height = rand(70, 170);
-            const peak = new THREE.Mesh(createMountainGeometry(rand(55, 95), height, height > 115), mountainMaterial);
+            // A grassy plateau: banded earthy cliff sides under a rounded grass cap
+            const height = rand(45, 120);
+            const radius = rand(45, 80);
+            const peak = new THREE.Group();
+            const cliff = new THREE.Mesh(createMountainGeometry(radius, height), mountainMaterial);
+            const cap = new THREE.Mesh(capGeometry, grassCapMaterial);
+            cap.scale.set(radius * 0.84, 10 + radius * 0.12, radius * 0.84);
+            cap.position.y = height - 1;
+            peak.add(cliff);
+            peak.add(cap);
             range.add(peak);
             peaks.push(peak);
         }
@@ -522,7 +617,11 @@ export function createLandscape({ bus, scene }) {
 
     function placeMountainRange(range, z) {
         const { side, peaks } = range.userData;
-        range.position.set(side * rand(MOUNTAIN.X_MIN, MOUNTAIN.X_MAX), 0, z);
+        // In the hills the ranges crowd in close to the road
+        const hills = zoneWeightsAt(z).mountain;
+        const x = lerp(rand(MOUNTAIN.X_MIN, MOUNTAIN.X_MAX), rand(MOUNTAIN.X_MIN * 0.6, MOUNTAIN.X_MIN * 0.72), hills);
+        range.position.set(roadCenterX(z) + side * x, 0, z);
+        range.userData.key = Math.random();
         peaks.forEach((peak, i) => {
             const s = rand(0.85, 1.2);
             peak.position.set(rand(-30, 30), 0, (i - (peaks.length - 1) / 2) * rand(45, 70));
@@ -556,7 +655,82 @@ export function createLandscape({ bus, scene }) {
     forests.forEach((patch, i) => placeForest(patch, startZ + 40 - i * 80, initialWater));
     mountains.forEach((range, i) => placeMountainRange(range, startZ + 250 - i * 100));
 
-    [...ponds, ...lakes, ...forests, ...mountains].forEach(item => scene.add(item));
+    // --- Floating islands (grass cap, rocky underside, a lollipop tree) -----
+    function createIsland() {
+        const island = new THREE.Group();
+        const radius = rand(12, 22);
+        const rock = new THREE.Mesh(createIslandRockGeometry(radius, radius * rand(1.1, 1.6)), islandRockMaterial);
+        const grass = new THREE.Mesh(capGeometry, islandGrassMaterial);
+        grass.scale.set(radius * 1.02, radius * 0.22, radius * 1.02);
+        grass.position.y = -0.5;
+        island.add(rock);
+        island.add(grass);
+
+        const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+        const crown = new THREE.Mesh(crownGeometry, broadleafMaterial);
+        const treeScale = radius / 14;
+        const tx = rand(-0.3, 0.3) * radius;
+        const tz = rand(-0.3, 0.3) * radius;
+        trunk.scale.setScalar(treeScale);
+        crown.scale.setScalar(treeScale);
+        trunk.position.set(tx, radius * 0.2, tz);
+        crown.position.set(tx, radius * 0.2, tz);
+        island.add(trunk);
+        island.add(crown);
+        island.userData = {
+            baseY: 0, phase: rand(0, Math.PI * 2), speed: rand(0.25, 0.45), spin: rand(-0.02, 0.02), crown, trunk
+        };
+        return island;
+    }
+
+    function placeIsland(island, z) {
+        const side = Math.random() < 0.5 ? -1 : 1;
+        island.userData.baseY = rand(ISLAND.Y_MIN, ISLAND.Y_MAX);
+        island.position.set(roadCenterX(z) + side * rand(ISLAND.X_MIN, ISLAND.X_MAX), island.userData.baseY, z);
+        island.userData.key = Math.random();
+        island.rotation.y = rand(0, Math.PI * 2);
+        island.userData.crown.material = pick([broadleafMaterial]);
+    }
+
+    const islands = Array.from({ length: ISLAND.COUNT }, createIsland);
+    islands.forEach((island, i) => placeIsland(island, startZ + 60 - i * 110));
+
+    // --- Fluffy clouds: every puff of every cloud is one instance ------------
+    const PUFFS = 7;
+    const cloudMesh = new THREE.InstancedMesh(puffGeometry, cloudMaterial, CLOUD.COUNT * PUFFS);
+    cloudMesh.frustumCulled = false;
+    const clouds = Array.from({ length: CLOUD.COUNT }, () => ({
+        x: rand(-CLOUD.X_MAX, CLOUD.X_MAX),
+        y: rand(CLOUD.Y_MIN, CLOUD.Y_MAX),
+        z: rand(0, CLOUD.RANGE),
+        size: rand(0.8, 1.6),
+        speed: rand(0.6, 1.4),
+        puffs: Array.from({ length: PUFFS }, (_, k) => ({
+            x: (k - (PUFFS - 1) / 2) * rand(7, 10),
+            y: rand(0, 5) + (k === 3 ? 4 : 0),
+            z: rand(-5, 5),
+            r: k === 3 ? rand(11, 14) : rand(7, 11)
+        }))
+    }));
+
+    function updateClouds(busZ, t) {
+        let n = 0;
+        clouds.forEach(c => {
+            // Clouds stay fixed in the world (they drift sideways slowly) and wrap
+            // around the bus so there are always some in view
+            const cz = busZ - CLOUD.RANGE / 2 + ((((c.z - busZ) % CLOUD.RANGE) + CLOUD.RANGE) % CLOUD.RANGE);
+            const drift = ((c.x + t * CLOUD.DRIFT * c.speed + CLOUD.X_MAX) % (CLOUD.X_MAX * 2) + CLOUD.X_MAX * 2) % (CLOUD.X_MAX * 2) - CLOUD.X_MAX;
+            c.puffs.forEach(p => {
+                const s = p.r * c.size;
+                setInstance(cloudMesh, n++, drift + p.x * c.size, c.y + p.y * c.size, cz + p.z * c.size,
+                    s, s * 0.7, s);
+            });
+        });
+        cloudMesh.instanceMatrix.needsUpdate = true;
+    }
+    updateClouds(startZ, 0);
+
+    [...ponds, ...lakes, ...forests, ...mountains, ...islands, cloudMesh].forEach(item => scene.add(item));
 
     // --- Per-frame update ---------------------------------------------------
     let time = 0;
@@ -592,13 +766,32 @@ export function createLandscape({ bus, scene }) {
 
         recycleBehind(mountains, busZ, {
             behind: MOUNTAIN.BEHIND,
-            gapFor: () => rand(MOUNTAIN.GAP_MIN, MOUNTAIN.GAP_MAX),
+            // Hill country packs the ranges closer together
+            gapFor: () => rand(MOUNTAIN.GAP_MIN, MOUNTAIN.GAP_MAX) * lerp(1, 0.6, biomeWeights.mountain),
             place: placeMountainRange
         });
 
-        // Ripples drift slowly across the water; the boats bob on them
+        // Floating islands: recycle, then bob and turn very slowly
+        recycleBehind(islands, busZ, {
+            behind: ISLAND.BEHIND,
+            gapFor: () => rand(ISLAND.GAP_MIN, ISLAND.GAP_MAX),
+            place: placeIsland
+        });
+        islands.forEach(island => {
+            const d = island.userData;
+            island.position.y = d.baseY + Math.sin(time * d.speed + d.phase) * 2.2;
+            island.rotation.y += d.spin * dt;
+        });
+
+        applyBiomeVisibility();
+        updateClouds(busZ, time);
+        updateEnvironment(dt);
+
+        // Ripples drift slowly across the water and glint (shimmer)
         rippleTexture.offset.x = (rippleTexture.offset.x + dt * 0.01) % 1;
         rippleTexture.offset.y = (rippleTexture.offset.y + dt * 0.006) % 1;
+        const shimmer = 0.15 + Math.sin(time * 1.7) * 0.06;
+        waterMaterials.forEach((m, i) => { m.emissiveIntensity = shimmer + Math.sin(time * 2.3 + i) * 0.03; });
         lakes.forEach((lake, i) => {
             const boat = lake.userData.boat;
             boat.position.y = WATER_Y + Math.sin(time * 1.6 + i) * 0.05;
@@ -611,8 +804,19 @@ export function createLandscape({ bus, scene }) {
         ponds,
         lakes,
         mountains,
+        islands,
         update,
         waterEllipses,
+        /** Zone mix at the bus: {farmland, mountain, desert, coast}, summing to ~1. */
+        setBiomeWeights(weights) {
+            biomeWeights = { farmland: 0, mountain: 0, desert: 0, coast: 0, ...weights };
+            applyBiomeVisibility();
+        },
+        /** Optional: (route distance) => weights, so each item uses the mix at its own place. */
+        setBiomeSampler(fn) {
+            biomeSampler = typeof fn === 'function' ? fn : null;
+            applyBiomeVisibility();
+        },
         getState: () => ({
             forests: forests.length,
             ponds: ponds.length,

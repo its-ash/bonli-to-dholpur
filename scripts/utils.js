@@ -12,38 +12,64 @@ import {
  * @returns {THREE.CanvasTexture}
  */
 export function createSkyTexture() {
-    // Only a handful of vertical bands + blocky dithering = pixel-art sky
+    // Smooth pastel gradient. Canvas top = zenith, the middle row is the horizon
+    // (the dome's equator), and the lower half repeats the horizon haze.
     const canvas = document.createElement('canvas');
-    canvas.width = 32;
-    canvas.height = 128;
+    canvas.width = 4;
+    canvas.height = 256;
     const ctx = canvas.getContext('2d');
 
-    const bands = [
-        '#3E6D9E', // horizon haze
-        '#4A90D9',
-        '#3C7EC4',
-        '#3168AF',
-        '#28589A',
-        '#1E3A5F'
-    ];
-    const bandHeight = Math.ceil(128 / bands.length);
-    bands.forEach((color, i) => {
-        ctx.fillStyle = color;
-        ctx.fillRect(0, i * bandHeight, 32, bandHeight);
-    });
+    const gradient = ctx.createLinearGradient(0, 0, 0, 256);
+    gradient.addColorStop(0.00, '#6DBBEF'); // zenith sky-blue
+    gradient.addColorStop(0.22, '#8FD0F5');
+    gradient.addColorStop(0.38, '#C3E6F7'); // pale blue
+    gradient.addColorStop(0.46, '#FADFE6'); // candy pink glow
+    gradient.addColorStop(0.50, '#F6EEEA'); // cream horizon (matches the fog)
+    gradient.addColorStop(1.00, '#F6EEEA');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 4, 256);
 
-    // Blocky dither rows between the bands to hide the seam harshly (retro look)
-    for (let i = 1; i < bands.length; i++) {
-        const y = i * bandHeight;
-        ctx.fillStyle = bands[i];
-        for (let x = 0; x < 32; x += 4) {
-            ctx.fillRect(x + ((i % 2) * 2), y - 2, 2, 2);
-        }
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.magFilter = THREE.LinearFilter;
+    texture.minFilter = THREE.LinearFilter;
+    texture.colorSpace = THREE.SRGBColorSpace;
+    return texture;
+}
+
+/**
+ * A soft, tileable grass texture: mint/lime base with big gentle blotches.
+ * Blotches are drawn wrapped so the tile repeats seamlessly.
+ * @returns {THREE.CanvasTexture}
+ */
+export function createGrassTexture() {
+    const size = 128;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = COLORS.GRASS_PIXELS[0];
+    ctx.fillRect(0, 0, size, size);
+
+    const tints = ['190,235,140', '140,215,150', '255,255,200'];
+    const alphas = [0.32, 0.24, 0.16];
+    for (let i = 0; i < 26; i++) {
+        const x = Math.random() * size;
+        const y = Math.random() * size;
+        const r = 10 + Math.random() * 22;
+        // Soft radial blotch, drawn at the wrapped offsets so the tile repeats
+        [-size, 0, size].forEach(ox => [-size, 0, size].forEach(oy => {
+            const g = ctx.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, r);
+            g.addColorStop(0, `rgba(${tints[i % 3]},${alphas[i % 3]})`);
+            g.addColorStop(1, `rgba(${tints[i % 3]},0)`);
+            ctx.fillStyle = g;
+            ctx.fillRect(x + ox - r, y + oy - r, r * 2, r * 2);
+        }));
     }
 
     const texture = new THREE.CanvasTexture(canvas);
-    texture.magFilter = THREE.NearestFilter;
-    texture.minFilter = THREE.NearestFilter;
+    texture.magFilter = THREE.LinearFilter;
+    texture.minFilter = THREE.LinearMipmapLinearFilter;
+    texture.anisotropy = 16; // clamped to GPU max; stops grazing-angle shimmer
     texture.colorSpace = THREE.SRGBColorSpace;
     return texture;
 }
@@ -377,7 +403,7 @@ export function createRoadSegmentTexture({
 
     // --- Dirt shoulders (left/right edges of the canvas) ---
     const shoulderPixels = Math.round(shoulderWidth * texelsPerUnit);
-    const shoulderPalette = ['#A08050', '#8C6E44', '#B08C58', '#7A6038'];
+    const shoulderPalette = ['#F3DDB8', '#EBD2A8', '#F8E8CA', '#E6CB9F'];
     ctx.fillStyle = shoulderPalette[0];
     ctx.fillRect(0, 0, shoulderPixels, canvasHeight);
     ctx.fillRect(canvasWidth - shoulderPixels, 0, shoulderPixels, canvasHeight);
@@ -391,7 +417,7 @@ export function createRoadSegmentTexture({
     }
 
     // --- Asphalt ---
-    const asphaltPalette = ['#2D2D2D', '#262626', '#333333', '#1F1F1F'];
+    const asphaltPalette = ['#7C8798', '#768192', '#828D9E', '#737E8F'];
     ctx.fillStyle = asphaltPalette[0];
     ctx.fillRect(shoulderPixels, 0, canvasWidth - shoulderPixels * 2, canvasHeight);
 
@@ -410,24 +436,30 @@ export function createRoadSegmentTexture({
 
     [-LANE_DIVIDER, LANE_DIVIDER].forEach(laneX => {
         for (let y = 0; y < canvasHeight; y += dashPeriod) {
-            ctx.fillStyle = '#FFFFFF';
+            ctx.fillStyle = '#FFFBF2';
             ctx.fillRect(xOf(laneX) - Math.floor(dashWidth / 2), y, dashWidth, dashLength);
         }
     });
+
+    // --- Solid cream edge lines, just inside the asphalt ---
+    ctx.fillStyle = '#FFFBF2';
+    ctx.fillRect(shoulderPixels + 2, 0, 2, canvasHeight);
+    ctx.fillRect(canvasWidth - shoulderPixels - 4, 0, 2, canvasHeight);
 
     // --- Double yellow centre line (divides the two directions of travel) ---
     // Period 8 texels (5 on, 3 off) so the retro gaps line up across segments.
     [-CENTER_LINE_OFFSET, CENTER_LINE_OFFSET].forEach(offsetX => {
         const x = xOf(offsetX);
         for (let y = 0; y < canvasHeight; y += 8) {
-            ctx.fillStyle = '#FFD700';
+            ctx.fillStyle = '#FFD66B';
             ctx.fillRect(x, y, 1, 5);
         }
     });
 
     const texture = new THREE.CanvasTexture(canvas);
-    texture.magFilter = THREE.NearestFilter;
+    texture.magFilter = THREE.LinearFilter;
     texture.minFilter = THREE.LinearMipmapLinearFilter;
+    texture.anisotropy = 16; // clamped to GPU max; stops grazing-angle shimmer
     texture.colorSpace = THREE.SRGBColorSpace;
     return texture;
 }

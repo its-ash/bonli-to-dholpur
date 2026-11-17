@@ -47,7 +47,7 @@ export const WORLD_AHEAD = SEGMENT_LENGTH * SEGMENT_COUNT - 120;
 //   3 = very chunky, 2 = mild pixelation, 1 = full native resolution.
 // 2 keeps some of the retro character without making signs and lanes hard to
 // read on a phone.
-export const PIXEL_SCALE = 2;
+export const PIXEL_SCALE = 1;
 
 // Bus dimensions
 export const BUS_LENGTH = 10;
@@ -72,64 +72,85 @@ export const CAMERA_DAMPING = 8.0;
 export const CAMERA_MOBILE_ZOOM = 1.3;
 export const CAMERA_DESKTOP_ZOOM = 1.0;
 
+// --- Animation tuning (actors and props) ---
+export const ANIM = {
+    SPRING_K: 60,            // suspension stiffness
+    SPRING_DAMP: 7,          // suspension damping
+    PITCH_PER_ACCEL: 0.006,  // rad of nose lift per m/s^2
+    PITCH_MAX: 0.045,
+    BOB_PER_ACCEL: 0.004,
+    ROLL_SMOOTH: 5,          // body roll follow rate (1/s)
+    DOOR_SPEED: 3.2,         // door open/close rate (1/s)
+    DOOR_TRAVEL: 1.3,        // how far the sliding door moves along the body
+    INDICATOR_HZ: 1.6,
+    BRAKE_DECEL: 3.5,        // m/s^2 deceleration that lights the brake lamps
+    PUFF_COUNT: 10,
+    PUFF_LIFE: 1.1,
+    CAM_FOV_BASE: 60,
+    CAM_FOV_SPEED: 9,        // extra degrees of FOV at top speed
+    CAM_PULLBACK: 0.12,      // extra distance fraction at top speed
+    WALK_SWING: 0.7,         // leg swing amplitude (rad)
+    WAVE_CHANCE: 0.15
+};
+
 // Colors
 export const COLORS = {
     // Sky
-    SKY_HORIZON: 0x87CEEB,
-    SKY_MID: 0x4A90D9,
-    SKY_ZENITH: 0x1E3A5F,
+    SKY_HORIZON: 0xF6EEEA,
+    SKY_MID: 0xBFE4F6,
+    SKY_ZENITH: 0x78C3F0,
     
     // Ground
-    GROUND: 0x5D7B4A,
+    GROUND: 0xA9DE8E,
     
     // Road
-    ASPHALT: 0x2D2D2D,
-    SHOULDER: 0xA08050,
-    WHITE_LINE: 0xFFFFFF,
-    YELLOW_LINE: 0xFFD700,
-    GRASS: 0x3A6B2E,
+    ASPHALT: 0x7C8798,
+    SHOULDER: 0xF3DDB8,
+    WHITE_LINE: 0xFFFBF2,
+    YELLOW_LINE: 0xFFD66B,
+    GRASS: 0xA9DE8E,
     
-    // Trees
+    // Trees (pastel lollipop crowns: mint, lime, candy pink, peach)
     TREE_FOLIAGE: [
-        0x2D5A27, 0x3A6B2E, 0x4A7C3A, 0x558B2F, 0x2E7D32
+        0x8EDDA8, 0xA9E07A, 0x7FD6B8, 0xFFA8C8, 0xFFC49B, 0xB6E88C
     ],
-    TREE_TRUNK: 0x4A3728,
+    TREE_TRUNK: 0xC49A74,
     
     // Bus
-    BUS_BASE: '#C0392B',
-    BUS_STRIPES: ['#E74C3C', '#F39C12', '#FFFFFF', '#2C3E50'],
-    BUS_CABIN: 0x1A1A2E,
-    BUS_ROOF: 0x8B0000,
-    BUS_BUMPER: 0x333333,
-    BUS_WHEEL: 0x1A1A1A,
-    WHEEL_HUB: 0x9AA0A6,
+    BUS_BASE: '#FF8FA8',
+    BUS_STRIPES: ['#FFB3C1', '#FFD98A', '#FFFFFF', '#8EC5F0'],
+    BUS_CABIN: 0x9ED8F5,
+    BUS_ROOF: 0xFFF1D6,
+    BUS_BUMPER: 0xFFF6EA,
+    BUS_WHEEL: 0x4B4F63,
+    WHEEL_HUB: 0xFFE6A0,
     HEADLIGHT: 0xFFFFE0,
     TAILLIGHT: 0xFF0000,
     
     // Pixel-art texture palettes
-    ASPHALT_PIXELS: ['#2D2D2D', '#262626', '#333333', '#1F1F1F'],
-    GRASS_PIXELS: ['#3A6B2E', '#335F27', '#447C36', '#2D5525'],
+    ASPHALT_PIXELS: ['#7C8798', '#768192', '#828D9E', '#707B8C'],
+    GRASS_PIXELS: ['#A9DE8E', '#A0D886', '#B3E496', '#9AD282'],
 
     // Cars
-    CAR_COLORS_SAME_DIR: ['#E74C3C', '#3498DB', '#2ECC71', '#F39C12', '#9B59B6'],
-    CAR_COLORS_ONCOMING: ['#E67E22', '#E91E63', '#00BCD4', '#FF5722', '#795548'],
-    CAR_ROOF: 0x2C3E50,
-    CAR_WHEEL: 0x1A1A1A,
+    CAR_COLORS_SAME_DIR: ['#FF9AA2', '#9AD1FF', '#9BE8B5', '#FFD58A', '#C9A8F5'],
+    CAR_COLORS_ONCOMING: ['#FFB38A', '#FFA8D4', '#8FE3E8', '#FFC2A0', '#D8C0A8'],
+    CAR_ROOF: 0xFFF3DF,
+    CAR_WHEEL: 0x4B4F63,
     
     // Lighting
-    SUN_COLOR: 0xFFF5E0,
-    SUN_INTENSITY: 2.5,
-    HEMI_SKY: 0x87CEEB,
-    HEMI_GROUND: 0x4A766A,
-    HEMI_INTENSITY: 1.2,
+    SUN_COLOR: 0xFFE9C9,
+    SUN_INTENSITY: 2.2,
+    HEMI_SKY: 0xCDEBFF,
+    HEMI_GROUND: 0xF2D9C4,
+    HEMI_INTENSITY: 1.5,
     
     // Sun position
     SUN_POSITION: { x: 100, y: 200, z: 50 },
 
 };
-export const FOG_COLOR = 0x87CEEB;
-export const FOG_NEAR = 100;
-export const FOG_FAR = 600;          // far enough to see the distant mountains through the haze
+export const FOG_COLOR = 0xF6EEEA;
+export const FOG_NEAR = 140;
+export const FOG_FAR = 700;          // far enough to see the distant mountains through the haze
 
 export const SHADOW_CAMERA = { left: -100, right: 100, top: 100, bottom: -100, near: 1, far: 500 };
 export const SHADOW_MAP_SIZE = 2048;
@@ -197,6 +218,11 @@ export const LANDSCAPE = {
         COUNT: 12, X_MIN: 260, X_MAX: 340, PEAKS: 4,
         GAP_MIN: 70, GAP_MAX: 130, BEHIND: 300
     },
+    CLOUD: { COUNT: 16, RANGE: 1200, Y_MIN: 70, Y_MAX: 150, X_MAX: 420, DRIFT: 1.2 },
+    ISLAND: {
+        COUNT: 7, X_MIN: 70, X_MAX: 230, Y_MIN: 40, Y_MAX: 110,
+        GAP_MIN: 80, GAP_MAX: 150, BEHIND: 160
+    },
     SHORE_WIDTH: 2.5,       // sand/mud ring around the water
     SHORE_MARGIN: 3         // trees keep this far from any water
 };
@@ -247,9 +273,9 @@ export const DHABA_GAP_MAX = 230;
 // Each board is built once and recycled like the rest of the world.
 // `side` is -1 (left of the road) or +1 (right).
 export const DISTANCE_BOARDS = [
-    { name: 'बौंली', km: 12, side: -1 },
-    { name: 'सवाई माधोपुर', km: 28, side: 1 },
-    { name: 'धौलपुर', km: 46, side: -1 }
+    { name: 'लालसोट', km: 62, side: -1 },
+    { name: 'दौसा', km: 98, side: 1 },
+    { name: 'जयपुर', km: 150, side: -1 }
 ];
 export const DISTANCE_BOARD_X = 9.5;
 
@@ -294,4 +320,190 @@ export const BUS_SIM = {
     SAFETY_CAR_HIT: 4,
     SAFETY_PEDESTRIAN_HIT: 12,
     HORN_FREQUENCY: 420        // Hz
+};
+
+// --- The route: Bonli -> Jaipur (Sindhi Camp bus stand) ---
+// Stops are placed along the road by distance from the start. `town` stops are
+// compulsory (missing one costs points); `village` stops are optional pickups.
+// 1 km of route is UNITS_PER_KM world units, so the whole trip is LENGTH units:
+// about 11-12 minutes at the 20 u/s cruise, plus the stops.
+export const ROUTE = {
+    START_NAME: 'बौंली',
+    START_EN: 'Bonli',
+    END_NAME: 'जयपुर',
+    END_EN: 'Jaipur',
+    END_STAND: 'सिंधी कैंप बस स्टैंड',
+    END_STAND_EN: 'Sindhi Camp Bus Stand',
+    TOTAL_KM: 150,
+    UNITS_PER_KM: 90,
+    LENGTH: 150 * 90,               // world units from the start stand to Jaipur
+    ARRIVE_ZONE: 25,                // stop within this distance of the end to arrive
+    OVERSHOOT: 45,                  // driving this far past the end also ends the trip
+    MISS_MARGIN: 40,                // units past a compulsory stop before it counts as missed
+    PAR_TIME: 780,                  // seconds: finishing sooner earns a time bonus
+    FUEL_BURN_SCALE: 1.6,           // the trip needs about one refuel stop
+    LOW_FUEL_PERCENT: 30,
+    OUT_OF_FUEL_GRACE: 2.5,         // seconds stuck without fuel before the trip is over
+    TOWN_WAITING: [10, 22],         // passengers waiting at a town stop (min, max)
+    VILLAGE_WAITING: [3, 9],
+    STOPS: [
+        { id: 'bhagwatpura', kind: 'village', km: 12, name: 'भगवतपुरा', en: 'Bhagwatpura' },
+        { id: 'malarna', kind: 'town', km: 26, name: 'मालारना डूंगर', en: 'Malarna Dungar' },
+        { id: 'ramgarh', kind: 'village', km: 44, name: 'रामगढ़ पचवारा', en: 'Ramgarh Pachwara' },
+        { id: 'lalsot', kind: 'town', km: 62, name: 'लालसोट', en: 'Lalsot' },
+        { id: 'sikrai', kind: 'village', km: 80, name: 'सिकराय', en: 'Sikrai' },
+        { id: 'dausa', kind: 'town', km: 98, name: 'दौसा', en: 'Dausa' },
+        { id: 'chandwaji', kind: 'village', km: 122, name: 'चांदवाजी', en: 'Chandwaji' }
+    ],
+    SCORE: {
+        TIME_BONUS_PER_SEC: 2,
+        SAFETY_POINTS: 5,           // per point of safety left
+        ARRIVAL_BONUS: 300,
+        MISSED_STOP_PENALTY: 150,
+        CRASH_PENALTY: 20,
+        PEDESTRIAN_PENALTY: 80,
+        GOOD_SAFETY: 70             // safety needed for a star
+    },
+    BEST_KEY: 'bonli-jaipur-best'
+};
+
+// --- Biomes: the zones the route passes through (scripts/biomes.js) ---
+// Zones are laid out by distance along the route (same units as journey.distance
+// and ROUTE.LENGTH). They are contiguous: each `start` equals the previous `end`,
+// the first starts at 0 and the last ends at ROUTE.LENGTH. Fiction is fine:
+// Dausa sits on a made-up sea coast.
+//   farmland  0-24 km    Bonli, Bhagwatpura
+//   mountain  24-56 km   Malarna Dungar, Ramgarh Pachwara
+//   desert    56-90 km   Lalsot, Sikrai
+//   coast     90-118 km  Dausa
+//   farmland  118-150 km Chandwaji, Jaipur outskirts
+// Palette colours are hex numbers; `sky` is a multiplier on the sky texture.
+const biomeKm = (km) => (km / ROUTE.TOTAL_KM) * ROUTE.LENGTH;
+export const BIOME_CROSSFADE = 300;   // world units over which two zones blend
+export const BIOMES = [
+    {
+        id: 'farmland', name: 'बौंली के खेत', en: 'Bonli Farmland',
+        start: 0, end: biomeKm(24),
+        palette: {
+            ground: 0xA9DE8E, shoulder: 0xF3DDB8,
+            fog: 0xF6EEEA, fogNear: 140, fogFar: 700,
+            sky: 0xFFFFFF, sun: 0xFFE9C9, sunIntensity: 2.2,
+            hemiSky: 0xCDEBFF, hemiGround: 0xF2D9C4
+        }
+    },
+    {
+        id: 'mountain', name: 'अरावली पहाड़ियाँ', en: 'Aravalli Hills',
+        start: biomeKm(24), end: biomeKm(56),
+        palette: {
+            ground: 0x9CC48A, shoulder: 0xD9CDB8,
+            fog: 0xDDE7EF, fogNear: 120, fogFar: 640,
+            sky: 0xE4EFFF, sun: 0xFFF1DC, sunIntensity: 2.0,
+            hemiSky: 0xBFD8F0, hemiGround: 0xD8CDBE
+        }
+    },
+    {
+        id: 'desert', name: 'थार रेगिस्तान', en: 'Thar Desert',
+        start: biomeKm(56), end: biomeKm(90),
+        palette: {
+            ground: 0xEBCB8B, shoulder: 0xF6E2B0,
+            fog: 0xF8E3C0, fogNear: 160, fogFar: 760,
+            sky: 0xFFE9C4, sun: 0xFFD9A0, sunIntensity: 2.4,
+            hemiSky: 0xFFE2B8, hemiGround: 0xF0C890
+        }
+    },
+    {
+        id: 'coast', name: 'समुद्र तट', en: 'Sea Coast',
+        start: biomeKm(90), end: biomeKm(118),
+        palette: {
+            ground: 0xE8DDB0, shoulder: 0xF7ECCB,
+            fog: 0xE6F4F8, fogNear: 150, fogFar: 760,
+            sky: 0xD6F0FF, sun: 0xFFF4E0, sunIntensity: 2.2,
+            hemiSky: 0xBFE8FF, hemiGround: 0xF0E4C8
+        }
+    },
+    {
+        id: 'farmland', name: 'जयपुर के खेत', en: 'Jaipur Farmland',
+        start: biomeKm(118), end: ROUTE.LENGTH,
+        palette: {
+            ground: 0xA9DE8E, shoulder: 0xF3DDB8,
+            fog: 0xF6EEEA, fogNear: 140, fogFar: 700,
+            sky: 0xFFFFFF, sun: 0xFFE9C9, sunIntensity: 2.2,
+            hemiSky: 0xCDEBFF, hemiGround: 0xF2D9C4
+        }
+    }
+];
+
+// Mountain-pass biome tuning (scripts/biome_mountain.js; every key is optional)
+export const MOUNTAIN_BIOME = {
+    CHUNK_LEN: 36,          // metres of road per scenery chunk (keep a multiple of 4)
+    CHUNK_COUNT: 12,        // chunks in the recycled ring
+    SINK: 34,               // scenery sinks this far below ground at weight 0
+    BARRIER_X: 8.45,        // centre line of the painted stone barrier
+    SIGN_GAP: 95, MONKEY_GAP: 70, FOG_GAP: 55,
+    WATERFALL_EVERY: 13, BRIDGE_EVERY: 17, FORT_EVERY: 15   // chunks between set pieces
+};
+
+// =============================================
+// TRAFFIC_TYPES - the mix of vehicles on the road (scripts/traffic_models.js,
+// scripts/vehicles.js). length/width are the collision box (units), speed is
+// the cruising range in u/s, lane 'outer' = slow vehicles hug the outer lane,
+// weave = sideways wobble (units) inside the lane. Cars have several body
+// styles, each with its own box (see CAR_STYLES in traffic_models.js).
+// =============================================
+export const TRAFFIC_TYPES = {
+    car:     { speed: [12, 18], oncomingSpeed: [15, 20], lane: 'any' },
+    auto:    { length: 2.7, width: 1.5, speed: [9, 14],  lane: 'outer' },
+    bike:    { length: 2.1, width: 0.8, speed: [12, 22], lane: 'any', weave: 0.5 },
+    bicycle: { length: 1.8, width: 0.6, speed: [4, 7],   lane: 'outer', weave: 0.15 },
+    truck:   { length: 8.6, width: 2.5, speed: [12, 18], lane: 'any' },
+    tractor: { length: 6.8, width: 2.1, speed: [6, 9],   lane: 'outer' }
+};
+
+// Extra (non-car) vehicles per direction, on top of SAME_DIRECTION_CAR_COUNT /
+// ONCOMING_CAR_COUNT cars. Kept small so phones stay smooth.
+export const TRAFFIC_MIX = {
+    sameDir:  { auto: 1, bike: 2, bicycle: 1, truck: 1, tractor: 1 },
+    oncoming: { auto: 1, bike: 2, bicycle: 1, truck: 1 }
+};
+
+// Car paints, weighted like Indian roads: plenty of white and silver
+export const TRAFFIC_CAR_PAINTS = [
+    0xF4F4F0, 0xF4F4F0, 0xF4F4F0, 0xF4F4F0, 0xF4F4F0, 0xF4F4F0,   // white
+    0xCBD0D8, 0xCBD0D8, 0xCBD0D8,                                 // silver
+    0x8D93A0, 0x8D93A0,                                           // grey
+    0xE8626E, 0xE8626E,                                           // red
+    0x6FA3E6, 0x6FA3E6,                                           // blue
+    0x3A3D4C, 0xD9C6A0, 0x8FD0A8                                  // black, beige, mint
+];
+
+// --- JUNCTIONS: roundabouts, crossroads and T-junctions (scripts/junctions.js) ---
+// Sites sit at fixed route distances (km from the Bonli start). Each one adds a
+// straight zone to the road path, so registerJunctionZones() must run BEFORE the
+// endless world is built. Roundabouts are "through" roundabouts: the highway
+// cuts straight across a ring road, so the bus never has to leave its lanes.
+export const JUNCTIONS = {
+    ZONE_HALF: 70,          // half length of the straight road around each junction
+    BUILD_RANGE: 600,       // build a junction when the bus is within this many metres
+    HIDE_RANGE: 700,        // hide it again beyond this
+    ANIM_RANGE: 260,        // lamps / cross traffic / fountain animate within this
+    RING_R: 21,             // roundabout ring road radius
+    ISLAND_R: 14,           // grass island radius
+    STOP_LINE: 11,          // metres before the junction centre (on the bus's side)
+    SIGNAL_PERIOD: 30,      // seconds for one full signal cycle
+    APPROACH: 100,          // signalStateAt reports a signal this far before its stop line
+    SAFETY_RED_LIGHT: 6,    // safety points lost for running a red light
+    SITES: [
+        { km: 5,   kind: 'crossroads', name: 'Bonli Chauraha' },
+        { km: 19,  kind: 'tee',        name: 'Bhagwatpura Tiraha' },
+        { km: 24.9, kind: 'roundabout', name: 'Malarna Circle' },
+        { km: 36,  kind: 'crossroads', name: 'Ramgarh Chauraha' },
+        { km: 53,  kind: 'tee',        name: 'Hill Tiraha' },
+        { km: 61,  kind: 'roundabout', name: 'Lalsot Circle' },
+        { km: 71,  kind: 'crossroads', name: 'Sikrai Chauraha' },
+        { km: 85,  kind: 'tee',        name: 'Desert Tiraha' },
+        { km: 97,  kind: 'roundabout', name: 'Dausa Circle' },
+        { km: 108, kind: 'tee',        name: 'Coast Tiraha' },
+        { km: 130, kind: 'crossroads', name: 'Chandwaji Chauraha' },
+        { km: 142, kind: 'roundabout', name: 'Jaipur Gate Circle' }
+    ]
 };
